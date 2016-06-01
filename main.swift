@@ -136,6 +136,8 @@ class Lexer : Sequence
           return lexOperator();
         case "a"..."z", "A"..."Z", "_", "$":
           return lexIdentifier()
+        case "`":
+          return lexEscapedIdentifier()
         default:
           if char.isIdentifierHead
           {
@@ -146,11 +148,7 @@ class Lexer : Sequence
       }
     }
 
-    return Token(
-      type: .EOF,
-      content: "",
-      range: self.index..<self.index
-    )
+    return makeToken(type: .EOF, numberOfChars: 0)
   }
 
   func advance()
@@ -241,24 +239,15 @@ class Lexer : Sequence
         .withNote("comment started here", range: start..<start)
     }
 
-    return Token(
-      type: .Comment(true),
-      content: String(self.characters[start..<self.index]),
-      range: start..<self.index
-    )
+    return makeToken(type: .Comment(true), range: start..<self.index)
   }
 
   func lexAllMatching(as type: TokenType, pred: (UnicodeScalar) -> Bool) -> Token
   {
     let start = self.index
-
     self.advanceWhile(pred: pred)
 
-    return Token(
-      type: type,
-      content: String(self.characters[start..<self.index]),
-      range: start..<self.index
-    )
+    return makeToken(type: type, range: start..<self.index)
   }
 
   func lexUntilEndOfLine(as type: TokenType) -> Token
@@ -299,11 +288,47 @@ class Lexer : Sequence
     let content = String(self.characters[start..<self.index])
     let type = TokenType(forIdentifier: content)
 
-    return Token(
-      type: type,
-      content: content,
-      range: start..<self.index
-    )
+    return Token(type: type, content: content, range: start..<self.index)
+  }
+
+  func lexEscapedIdentifier() -> Token
+  {
+    assert(self.currentChar != nil, "Cannot lex identifier at EOF")
+    assert(self.currentChar! == "`", "Not a valid starting point for an escaped identifier")
+
+    let start = self.index
+    self.advance()
+    let contentStart = self.index
+
+    if self.currentChar!.isIdentifierHead
+    {
+      while let char = self.currentChar
+      {
+        if char.isIdentifierBody
+        {
+          self.advance()
+        }
+        else
+        {
+            break
+        }
+      }
+
+      if self.currentChar == "`"
+      {
+        let contentEnd = self.index
+        self.advance()
+
+        return Token(
+          type: .Identifier(true),
+          content: String(self.characters[contentStart..<contentEnd]),
+          range: start..<self.index
+        )
+      }
+    }
+
+    self.index = start
+    return makeTokenAndAdvance(type: .Punctuator("`"))
   }
 
   func lexOperator() -> Token
@@ -391,12 +416,7 @@ class Lexer : Sequence
       let name = String(self.characters[nameStart..<self.index])
       if let type = TokenType(forPoundKeyword: name)
       {
-        let content = String(self.characters[start..<self.index])
-        return Token(
-          type: type,
-          content: content,
-          range: start..<self.index
-        )
+        return Token(type: type, content: name, range: start..<self.index)
       }
     }
 
@@ -410,20 +430,32 @@ class Lexer : Sequence
     return makeTokenAndAdvance(type: .Newline, numberOfChars: isCRLF ? 2 : 1)
   }
 
-  func makeTokenAndAdvance(type: TokenType, numberOfChars: Int = 1) -> Token
+  func makeToken(type: TokenType, range: Range<Index>) -> Token
+  {
+    return Token(
+      type: type,
+      content: String(self.characters[range]),
+      range: range
+    )
+  }
+
+  func makeToken(type: TokenType, numberOfChars: Int = 1) -> Token
   {
     let start = self.index
+    var end = self.index
 
-    for _ in 1...numberOfChars
+    for _ in 0..<numberOfChars
     {
-      self.index = self.characters.index(after: self.index)
+      end = self.characters.index(after: end)
     }
 
-    let token = Token(
-      type: type,
-      content: String(self.characters[start..<self.index]),
-      range: start..<self.index
-    )
+    return makeToken(type: type, range: start..<end)
+  }
+
+  func makeTokenAndAdvance(type: TokenType, numberOfChars: Int = 1) -> Token
+  {
+    let token = makeToken(type: type, numberOfChars: numberOfChars)
+    self.index = token.range.upperBound
 
     return token
   }
@@ -497,8 +529,16 @@ if let source = Source(path: relativePath("tests/test.swift")!)
 {
     var l = Lexer(source)
 
-    for _ in l {
-
+    for token in l.filter({
+        switch $0.type {
+          case .Whitespace:
+            return false
+          default:
+            return true
+        }
+      })
+    {
+      print("\(token.type): \(token.content.literalString)")
     }
 
     for diag in l.diagnoses
@@ -539,17 +579,4 @@ if let source = Source(path: relativePath("tests/test.swift")!)
         }
       }
     }
-    /*
-    for token in l.filter({
-        switch $0.type {
-          case .Whitespace:
-            return false
-          default:
-            return true
-        }
-      })
-    {
-      print("\(token.type): \(token.content.literalString)")
-    }
-    */
 }

@@ -3,7 +3,7 @@ public enum TokenType
 {
   case Unknown
   case EOF
-  case Identifier
+  case Identifier(Bool)
   case Operator(String)
   case IntegerLiteral
   case FloatLiteral
@@ -36,7 +36,7 @@ public enum TokenType
            "super", "self", "Self", "throw", "throws", "true", "try", "_":
         self = .Keyword(identifier)
       default:
-        self = .Identifier
+        self = .Identifier(false)
     }
   }
 
