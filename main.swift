@@ -21,7 +21,7 @@ public enum TokenType
   case PoundKeyword(String)
   case PoundConfig(String)
   case Punctuator(String)
-  case Hashbang(String)
+  case Hashbang
 }
 
 public struct Token
@@ -129,6 +129,8 @@ class Lexer : Sequence
             default:
               return makeTokenAndAdvance(type: .Operator("/"))
           }
+        case "#":
+          return self.lexHash()
         case "a"..."z", "A"..."Z", "_", "$":
           return lexIdentifier()
         default:
@@ -365,9 +367,46 @@ class Lexer : Sequence
       return lexUntilEndOfLine(as: .Hashbang)
     }
 
-    // TODO
+    let start = self.index
+    let line = self.line
+    let column = self.column
 
-    return makeTokenAndAdvance(.Punctuator("#"))
+    self.advance()
+
+    let nameStart = self.index
+
+    identifierLoop: while let char = self.currentChar
+    {
+      switch char
+      {
+        case "a"..."z", "A"..."Z":
+          self.advance()
+        default:
+          break identifierLoop
+      }
+    }
+
+    if self.index > nameStart
+    {
+      let name = String(self.source.unicodeScalars[nameStart..<self.index])
+      if let type = self.poundKeywordType(identifier: name)
+      {
+        let content = String(self.source.unicodeScalars[start..<self.index])
+        return Token(
+          type: type,
+          content: content,
+          line: line,
+          column: column,
+          index: start
+        )
+      }
+    }
+
+    self.index = start
+    self.line = line
+    self.column = column
+
+    return self.makeTokenAndAdvance(type: .Punctuator("#"))
   }
 
   /*
@@ -400,15 +439,29 @@ class Lexer : Sequence
     }
   }
 
-func lexNewline(isCRLF: Bool = false) -> Token
-{
-  let token = makeTokenAndAdvance(type: .Newline, numberOfChars: isCRLF ? 2 : 1)
+  func poundKeywordType(identifier: String) -> TokenType?
+  {
+    switch identifier
+    {
+      case "column", "file", "function", "sourceLocation", "else", "elseif",
+           "endif", "if", "selector":
+        return .PoundKeyword(identifier)
+      case "available":
+        return .PoundConfig(identifier)
+      default:
+        return nil
+    }
+  }
 
-  self.column = 1
-  self.line += 1
+  func lexNewline(isCRLF: Bool = false) -> Token
+  {
+    let token = makeTokenAndAdvance(type: .Newline, numberOfChars: isCRLF ? 2 : 1)
 
-  return token
-}
+    self.column = 1
+    self.line += 1
+
+    return token
+  }
 
   func makeTokenAndAdvance(type: TokenType, numberOfChars: Int = 1) -> Token
   {
@@ -450,6 +503,8 @@ extension String
             return "\\t"
           case "\"":
             return "\\\""
+          case "\\":
+            return "\\\\"
           default:
             return String($0)
         }
@@ -463,7 +518,14 @@ if let data = try? NSString(contentsOfFile: #file, encoding: NSUTF8StringEncodin
 {
     var l = Lexer(String(data))
 
-    for token in l
+    for token in l.filter({
+        switch $0.type {
+          case .Whitespace:
+            return false
+          default:
+            return true
+        }
+      })
     {
       print("\(token.line),\(token.column) \(token.type): \(token.content.literalString)")
     }
