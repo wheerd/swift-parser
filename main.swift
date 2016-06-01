@@ -1,38 +1,6 @@
 import Foundation
 import Swift
 
-var 会意字 = "foo"
-
-public enum TokenType
-{
-  case Unknown
-  case EOF
-  case Identifier
-  case Operator(String)
-  case IntegerLiteral
-  case FloatLiteral
-  case StringLiteral
-  case Comment(Bool)
-  case Whitespace
-  case Newline
-  case Keyword(String)
-  case StatementKeyword(String)
-  case DeclarationKeyword(String)
-  case PoundKeyword(String)
-  case PoundConfig(String)
-  case Punctuator(String)
-  case Hashbang
-}
-
-public struct Token
-{
-    let type: TokenType
-    let content: String
-    let line: Int
-    let column: Int
-    let index: String.UnicodeScalarView.Index
-}
-
 class Lexer : Sequence
 {
   typealias Index = String.UnicodeScalarView.Index
@@ -134,7 +102,7 @@ class Lexer : Sequence
         case "a"..."z", "A"..."Z", "_", "$":
           return lexIdentifier()
         default:
-          if self.isIdentifierHead(char)
+          if char.isIdentifierHead
           {
               return self.lexIdentifier()
           }
@@ -156,58 +124,6 @@ class Lexer : Sequence
   {
     self.index = self.source.unicodeScalars.index(after: self.index)
     self.column += 1
-  }
-
-  func isIdentifierHead(_ c: UnicodeScalar) -> Bool
-  {
-    if c.isASCII
-    {
-      switch c
-      {
-        case "a"..."z", "A"..."Z", "_", "$":
-          return true
-        default:
-          return false
-      }
-    }
-
-    switch c
-    {
-      case "\u{00A8}", "\u{00AA}", "\u{00AD}", "\u{00AF}", "\u{00B2}"..."\u{00B5}", "\u{00B7}"..."\u{00BA}",
-           "\u{00BC}"..."\u{00BE}", "\u{00C0}"..."\u{00D6}", "\u{00D8}"..."\u{00F6}", "\u{00F8}"..."\u{00FF}",
-           "\u{0100}"..."\u{02FF}", "\u{0370}"..."\u{167F}", "\u{1681}"..."\u{180D}", "\u{180F}"..."\u{1DBF}",
-           "\u{1E00}"..."\u{1FFF}",
-           "\u{200B}"..."\u{200D}", "\u{202A}"..."\u{202E}", "\u{203F}"..."\u{2040}", "\u{2054}", "\u{2060}"..."\u{206F}",
-           "\u{2070}"..."\u{20CF}", "\u{2100}"..."\u{218F}", "\u{2460}"..."\u{24FF}", "\u{2776}"..."\u{2793}",
-           "\u{2C00}"..."\u{2DFF}", "\u{2E80}"..."\u{2FFF}",
-           "\u{3004}"..."\u{3007}", "\u{3021}"..."\u{302F}", "\u{3031}"..."\u{303F}", "\u{3040}"..."\u{D7FF}",
-           "\u{F900}"..."\u{FD3D}", "\u{FD40}"..."\u{FDCF}", "\u{FDF0}"..."\u{FE1F}", "\u{FE30}"..."\u{FE44}",
-           "\u{FE47}"..."\u{FFFD}",
-           "\u{10000}"..."\u{1FFFD}", "\u{20000}"..."\u{2FFFD}", "\u{30000}"..."\u{3FFFD}", "\u{40000}"..."\u{4FFFD}",
-           "\u{50000}"..."\u{5FFFD}", "\u{60000}"..."\u{6FFFD}", "\u{70000}"..."\u{7FFFD}", "\u{80000}"..."\u{8FFFD}",
-           "\u{90000}"..."\u{9FFFD}", "\u{A0000}"..."\u{AFFFD}", "\u{B0000}"..."\u{BFFFD}", "\u{C0000}"..."\u{CFFFD}",
-           "\u{D0000}"..."\u{DFFFD}", "\u{E0000}"..."\u{EFFFD}":
-        return true
-      default:
-        return false
-    }
-  }
-
-  func isIdentifierBody(_ c: UnicodeScalar) -> Bool
-  {
-    if isIdentifierHead(c) && c != "$"
-    {
-      return true
-    }
-
-    switch c
-    {
-      case "0"..."9",
-           "\u{0300}", "\u{036F}", "\u{1DC0}"..."\u{1DFF}", "\u{20D0}"..."\u{20FF}", "\u{FE20}"..."\u{FE2F}":
-        return true
-      default:
-        return false
-    }
   }
 
   func advanceWhile(pred: (UnicodeScalar) -> Bool)
@@ -326,7 +242,7 @@ class Lexer : Sequence
   func lexIdentifier() -> Token
   {
     assert(self.currentChar != nil, "Cannot lex identifier at EOF")
-    assert(self.isIdentifierHead(self.currentChar!), "Not a valid starting point for an identifier")
+    assert(self.currentChar!.isIdentifierHead, "Not a valid starting point for an identifier")
 
     let start = self.index
     let line = self.line
@@ -336,7 +252,7 @@ class Lexer : Sequence
 
     while let char = self.currentChar
     {
-      if self.isIdentifierBody(char)
+      if char.isIdentifierBody
       {
         self.advance()
       }
@@ -347,7 +263,7 @@ class Lexer : Sequence
     }
 
     let content = String(self.source.unicodeScalars[start..<self.index])
-    let type = self.identifierType(identifier: content)
+    let type = TokenType(forIdentifier: content)
 
     return Token(
       type: type,
@@ -389,7 +305,7 @@ class Lexer : Sequence
     if self.index > nameStart
     {
       let name = String(self.source.unicodeScalars[nameStart..<self.index])
-      if let type = self.poundKeywordType(identifier: name)
+      if let type = TokenType(forPoundKeyword: name)
       {
         let content = String(self.source.unicodeScalars[start..<self.index])
         return Token(
@@ -408,15 +324,6 @@ class Lexer : Sequence
 
     return self.makeTokenAndAdvance(type: .Punctuator("#"))
   }
-
-  /*
-
-  case "#column", "#file", "#function", "#sourceLocation",
-     "#available", "#else", "#elseif", "#endif", "#if", "#selector":
-  return .PoundKeyword(identifier.substring(from: identifier.characters.index(after: identifier.startIndex)))
-  case "#available":
-  return .PoundConfig(identifier.substring(from: identifier.characters.index(after: identifier.startIndex)))
-  */
 
   func identifierType(identifier: String) -> TokenType
   {
