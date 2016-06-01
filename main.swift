@@ -5,25 +5,23 @@ class Lexer : Sequence
 {
   typealias Index = String.UnicodeScalarView.Index
 
-  var line = 1
-  var column = 1
-  var source : String
+  let source : Source
   var index : Index
+  var diagnoses = [Diagnose]()
+  let characters: String.UnicodeScalarView
+  let startIndex: Index
+  let endIndex: Index
 
-  var nextChar : UnicodeScalar?
+  var prevChar : UnicodeScalar?
   {
     get
     {
-      if self.index == self.source.unicodeScalars.endIndex
+      if self.index == self.startIndex
       {
         return nil
       }
-      let nextIndex = self.source.unicodeScalars.index(after: self.index)
-      if nextIndex == self.source.unicodeScalars.endIndex
-      {
-        return nil
-      }
-      return self.source.unicodeScalars[nextIndex]
+      let prevIndex = self.characters.index(before: self.index)
+      return self.characters[prevIndex]
     }
   }
 
@@ -31,24 +29,59 @@ class Lexer : Sequence
   {
     get
     {
-      if self.index == self.source.unicodeScalars.endIndex
+      if self.index == self.endIndex
       {
         return nil
       }
-      return self.source.unicodeScalars[self.index]
+      return self.characters[self.index]
     }
   }
 
-  init(_ source: String)
+  var nextChar : UnicodeScalar?
+  {
+    get
+    {
+      if self.index == self.endIndex
+      {
+        return nil
+      }
+      let nextIndex = self.characters.index(after: self.index)
+      if nextIndex == self.endIndex
+      {
+        return nil
+      }
+      return self.characters[nextIndex]
+    }
+  }
+
+  init(_ source: Source)
   {
     self.source = source
-    self.index = source.unicodeScalars.startIndex
+    self.characters = source.characters
+    self.startIndex = source.start
+    self.endIndex = source.end
+
+    self.index = source.start
+  }
+
+  func diagnose(_ message: String, type: Diagnose.DiagnoseType, start: Index? = nil, end: Index? = nil) -> Diagnose
+  {
+    let start = start ?? self.index
+    let end = end ?? start
+
+    let diag = Diagnose(
+      message,
+      type: type,
+      range: start..<end,
+      source: source
+    )
+    diagnoses.append(diag)
+
+    return diag
   }
 
   func makeIterator() -> AnyIterator<Token> {
-    self.line = 1
-    self.column = 1
-    self.index = self.source.unicodeScalars.startIndex
+    self.index = self.startIndex
     var lastType : TokenType = .Unknown
 
     return AnyIterator {
@@ -70,7 +103,7 @@ class Lexer : Sequence
     {
       switch char
       {
-        case "[", "]", "{", "}", "(", ")", ":", ",", ";", ".", "=":
+        case "[", "]", "{", "}", "(", ")", ":", ",", ";":
           return makeTokenAndAdvance(type: .Punctuator(String(char)))
         case "\r":
           return lexNewline(isCRLF: self.nextChar == "\n")
@@ -99,6 +132,8 @@ class Lexer : Sequence
           }
         case "#":
           return self.lexHash()
+        case "=", "-", "+", "*", ">", "&", "|", "^", "~", ".":
+          return lexOperator();
         case "a"..."z", "A"..."Z", "_", "$":
           return lexIdentifier()
         default:
@@ -114,16 +149,13 @@ class Lexer : Sequence
     return Token(
       type: .EOF,
       content: "",
-      line: self.line,
-      column: self.column,
-      index: self.index
+      range: self.index..<self.index
     )
   }
 
   func advance()
   {
-    self.index = self.source.unicodeScalars.index(after: self.index)
-    self.column += 1
+    self.index = self.characters.index(after: self.index)
   }
 
   func advanceWhile(pred: (UnicodeScalar) -> Bool)
@@ -149,8 +181,6 @@ class Lexer : Sequence
   func lexMultilineComment() -> Token
   {
     let start = self.index
-    let line = self.line
-    let column = self.column
 
     self.advance()
     self.advance()
@@ -179,16 +209,6 @@ class Lexer : Sequence
             self.advance()
           }
           self.advance()
-        case "\r":
-          if self.nextChar == "\n"
-          {
-            self.advance()
-          }
-          fallthrough
-        case "\n":
-          self.advance()
-          self.line += 1
-          self.column = 0
         default:
           self.advance()
       }
@@ -196,32 +216,48 @@ class Lexer : Sequence
 
     if depth > 0
     {
-      // TODO: Error
+      var endIndex = self.index
+      if let prevChar = source.character(before: endIndex)
+      {
+        if prevChar == "\n"
+        {
+          endIndex = source.index(before: endIndex)!
+          if let prevChar = source.character(before: endIndex)
+          {
+            if prevChar == "\n"
+            {
+              endIndex = source.index(before: endIndex)!
+            }
+          }
+        }
+        else if prevChar == "\r"
+        {
+          endIndex = source.index(before: endIndex)!
+        }
+      }
+
+      diagnose("unterminated '/*' comment", type: .Error, start: endIndex)
+        .withInsertFix(at: endIndex, insert: "*/" * depth)
+        .withNote("comment started here", range: start..<start)
     }
 
     return Token(
       type: .Comment(true),
-      content: String(self.source.unicodeScalars[start..<self.index]),
-      line: line,
-      column: column,
-      index: start
+      content: String(self.characters[start..<self.index]),
+      range: start..<self.index
     )
   }
 
   func lexAllMatching(as type: TokenType, pred: (UnicodeScalar) -> Bool) -> Token
   {
     let start = self.index
-    let line = self.line
-    let column = self.column
 
     self.advanceWhile(pred: pred)
 
     return Token(
       type: type,
-      content: String(self.source.unicodeScalars[start..<self.index]),
-      line: line,
-      column: column,
-      index: start
+      content: String(self.characters[start..<self.index]),
+      range: start..<self.index
     )
   }
 
@@ -245,8 +281,6 @@ class Lexer : Sequence
     assert(self.currentChar!.isIdentifierHead, "Not a valid starting point for an identifier")
 
     let start = self.index
-    let line = self.line
-    let column = self.column
 
     self.advance()
 
@@ -262,15 +296,67 @@ class Lexer : Sequence
       }
     }
 
-    let content = String(self.source.unicodeScalars[start..<self.index])
+    let content = String(self.characters[start..<self.index])
     let type = TokenType(forIdentifier: content)
 
     return Token(
       type: type,
       content: content,
-      line: line,
-      column: column,
-      index: start
+      range: start..<self.index
+    )
+  }
+
+  func lexOperator() -> Token
+  {
+    assert(self.currentChar != nil, "Cannot lex operator at EOF")
+    assert(self.currentChar!.isOperatorHead, "Not a valid starting point for an operator")
+
+    let start = self.index
+
+    self.advance()
+
+    while let char = self.currentChar
+    {
+      if char.isOperatorBody
+      {
+        self.advance()
+      }
+      else
+      {
+          break
+      }
+    }
+
+    let content = String(self.characters[start..<self.index])
+    let leftBound = self.isLeftBound(startIndex: start)
+    let rightBound = self.isRightBound(endIndex: self.index, isLeftBound: leftBound)
+
+    switch content
+    {
+      case "=":
+        if (leftBound != rightBound) {
+          let d = diagnose("'=' must have consistent whitespace on both sides", type: .Error, start: start, end: self.index);
+          if (leftBound) {
+            d.fixIts.append(Diagnose.FixIt(
+              range: start..<start,
+              replacement: " "
+            ))
+          }
+          else
+          {
+            d.fixIts.append(Diagnose.FixIt(
+              range: self.index..<self.index,
+              replacement: " "
+            ))
+          }
+        }
+      default:
+        break
+    }
+    return Token(
+      type: .Operator(content),
+      content: content,
+      range: start..<self.index
     )
   }
 
@@ -278,14 +364,12 @@ class Lexer : Sequence
   {
     assert(self.currentChar == "#", "Cannot lex # at current position")
 
-    if self.nextChar == "!" && self.index == self.source.unicodeScalars.startIndex
+    if self.nextChar == "!" && self.index == self.startIndex
     {
       return lexUntilEndOfLine(as: .Hashbang)
     }
 
     let start = self.index
-    let line = self.line
-    let column = self.column
 
     self.advance()
 
@@ -304,127 +388,158 @@ class Lexer : Sequence
 
     if self.index > nameStart
     {
-      let name = String(self.source.unicodeScalars[nameStart..<self.index])
+      let name = String(self.characters[nameStart..<self.index])
       if let type = TokenType(forPoundKeyword: name)
       {
-        let content = String(self.source.unicodeScalars[start..<self.index])
+        let content = String(self.characters[start..<self.index])
         return Token(
           type: type,
           content: content,
-          line: line,
-          column: column,
-          index: start
+          range: start..<self.index
         )
       }
     }
 
     self.index = start
-    self.line = line
-    self.column = column
 
     return self.makeTokenAndAdvance(type: .Punctuator("#"))
   }
 
-  func identifierType(identifier: String) -> TokenType
-  {
-    switch identifier
-    {
-      case "associatedtype", "class", "deinit", "enum", "extension", "func",
-           "import", "init", "inout", "internal", "let", "operator", "private",
-           "protocol", "public", "static", "struct", "subscript", "typealias",
-           "var":
-        return .DeclarationKeyword(identifier)
-      case "break", "case", "continue", "default", "defer", "do", "else",
-           "fallthrough", "for", "guard", "if", "in", "repeat", "return",
-           "switch", "where", "while":
-        return .StatementKeyword(identifier)
-      case "as", "catch", "dynamicType", "false", "is", "nil", "rethrows",
-           "super", "self", "Self", "throw", "throws", "true", "try", "_":
-        return .Keyword(identifier)
-      default:
-        return .Identifier
-    }
-  }
-
-  func poundKeywordType(identifier: String) -> TokenType?
-  {
-    switch identifier
-    {
-      case "column", "file", "function", "sourceLocation", "else", "elseif",
-           "endif", "if", "selector":
-        return .PoundKeyword(identifier)
-      case "available":
-        return .PoundConfig(identifier)
-      default:
-        return nil
-    }
-  }
-
   func lexNewline(isCRLF: Bool = false) -> Token
   {
-    let token = makeTokenAndAdvance(type: .Newline, numberOfChars: isCRLF ? 2 : 1)
-
-    self.column = 1
-    self.line += 1
-
-    return token
+    return makeTokenAndAdvance(type: .Newline, numberOfChars: isCRLF ? 2 : 1)
   }
 
   func makeTokenAndAdvance(type: TokenType, numberOfChars: Int = 1) -> Token
   {
     let start = self.index
-    let column = self.column
 
     for _ in 1...numberOfChars
     {
-      self.index = self.source.unicodeScalars.index(after: self.index)
-      self.column += 1
+      self.index = self.characters.index(after: self.index)
     }
 
     let token = Token(
       type: type,
-      content: String(self.source.unicodeScalars[start..<self.index]),
-      line: self.line,
-      column: column,
-      index: start
+      content: String(self.characters[start..<self.index]),
+      range: start..<self.index
     )
 
     return token
   }
-}
 
-extension String
-{
-  var literalString : String
+  func isLeftBound(startIndex: Index) -> Bool
   {
-    get
+    if startIndex == self.startIndex
     {
-      return "\"" + self.characters.map {
-        switch $0
+      return false
+    }
+
+    let prevIndex = self.characters.index(before: startIndex)
+    switch self.characters[prevIndex]
+    {
+      case " ", "\t", "\r", "\n", "\0",
+           "(", "[", "{",
+           ",", ";", ":":
+        return false
+      case "/":
+        if prevIndex > self.startIndex
         {
-          case "\n":
-            return "\\n"
-          case "\r":
-            return "\\r"
-          case "\t":
-            return "\\t"
-          case "\"":
-            return "\\\""
-          case "\\":
-            return "\\\\"
-          default:
-            return String($0)
+          let prevPrevIndex = self.characters.index(before: prevIndex)
+          if self.characters[prevPrevIndex] == "*"
+          {
+            return false
+          }
         }
-      }.joined(separator: "") + "\""
+        fallthrough
+      default:
+        return true
+    }
+  }
+
+  func isRightBound(endIndex: Index, isLeftBound: Bool) -> Bool
+  {
+    if endIndex == self.endIndex
+    {
+      return false
+    }
+
+    switch self.characters[endIndex]
+    {
+      case " ", "\t", "\r", "\n", "\0",
+           ")", "]", "}",
+           ",", ";", ":":
+        return false
+      case ".":
+        return !isLeftBound
+      case "/":
+        let nextIndex = self.characters.index(after: endIndex)
+        if nextIndex != self.endIndex
+        {
+          if self.characters[nextIndex] == "*" || self.characters[nextIndex] == "/"
+          {
+            return false
+          }
+        }
+        fallthrough
+      default:
+        return true
     }
   }
 }
 
-
-if let data = try? NSString(contentsOfFile: #file, encoding: NSUTF8StringEncoding)
+func relativePath(_ path: String) -> String?
 {
-    var l = Lexer(String(data))
+  return NSURL(fileURLWithPath: #file, isDirectory: false).URLByDeletingLastPathComponent?.URLByAppendingPathComponent(path)?.path
+}
 
+if let source = Source(path: relativePath("tests/test.swift")!)
+{
+    var l = Lexer(source)
+
+    for _ in l {
+
+    }
+
+    for diag in l.diagnoses
+    {
+      let (lineRange, line, col) = diag.getContext()
+      let range = diag.range.clamped(to: lineRange)
+      let count = diag.source.characters.getCount(range: range)
+      print("\(diag.source.identifier):\(line):\(col) \(diag.type): \(diag.message)")
+      print(String(diag.source.characters[lineRange]))
+      print(" " * (col - 1), terminator: "")
+      print("^" * max(count, 1))
+      if !diag.fixIts.isEmpty
+      {
+        print("Fix:")
+        for fixIt in diag.fixIts
+        {
+          let (lineRange, line, col) = diag.source.getContext(index: fixIt.range.lowerBound)
+          let range = fixIt.range.clamped(to: lineRange)
+          let count = diag.source.characters.getCount(range: range)
+          print(String(diag.source.characters[lineRange]))
+          print(" " * (col - 1), terminator: "")
+          print("^" * max(count, 1))
+          print(" " * (col - 1), terminator: "")
+          print(fixIt.replacement)
+        }
+      }
+      if !diag.related.isEmpty
+      {
+        for related in diag.related
+        {
+          let (lineRange, line, col) = related.source.getContext(index: related.range.lowerBound)
+          let range = related.range.clamped(to: lineRange)
+          let count = related.source.characters.getCount(range: range)
+          print("  \(related.source.identifier):\(line):\(col) \(related.type): \(related.message)")
+          print("  " + String(related.source.characters[lineRange]))
+          print(" " * (col + 1), terminator: "")
+          print("^" * max(count, 1))
+        }
+      }
+    }
+    /*
     for token in l.filter({
         switch $0.type {
           case .Whitespace:
@@ -434,6 +549,7 @@ if let data = try? NSString(contentsOfFile: #file, encoding: NSUTF8StringEncodin
         }
       })
     {
-      print("\(token.line),\(token.column) \(token.type): \(token.content.literalString)")
+      print("\(token.type): \(token.content.literalString)")
     }
+    */
 }

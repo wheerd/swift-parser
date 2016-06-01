@@ -59,7 +59,5 @@ public struct Token
 {
     let type: TokenType
     let content: String
-    let line: Int
-    let column: Int
-    let index: String.UnicodeScalarView.Index
+    let range: Range<String.UnicodeScalarView.Index>
 }

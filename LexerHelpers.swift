@@ -115,3 +115,52 @@ extension UnicodeScalar
     }
   }
 }
+
+func * (str: String, times: Int) -> String
+{
+    return (0..<times).reduce("") { $0.0 + str }
+}
+
+extension String
+{
+  var literalString : String
+  {
+    get
+    {
+      return "\"" + self.characters.map {
+        switch $0
+        {
+          case "\n":
+            return "\\n"
+          case "\r":
+            return "\\r"
+          case "\t":
+            return "\\t"
+          case "\"":
+            return "\\\""
+          case "\\":
+            return "\\\\"
+          default:
+            return String($0)
+        }
+      }.joined(separator: "") + "\""
+    }
+  }
+}
+
+extension String.UnicodeScalarView
+{
+  func getCount(range: Range<String.UnicodeScalarView.Index>) -> Int
+  {
+    var count = 0
+    var index = range.lowerBound
+
+    while index != range.upperBound
+    {
+      index = self.index(after: index)
+      count += 1
+    }
+
+    return count
+  }
+}
