@@ -67,7 +67,7 @@ extension UnicodeScalar
         switch self
         {
           case "/", "=", "-", "+", "!", "*", "%", "<",
-               ">", "&", "|", "^", "~", "?":
+               ">", "&", "|", "^", "~", "?", ".":
             return true
           default:
             return false

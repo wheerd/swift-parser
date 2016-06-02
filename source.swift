@@ -31,6 +31,16 @@ class Source
     }
   }
 
+  func character(at index: Index) -> UnicodeScalar?
+  {
+    if index != self.end
+    {
+        return self.characters[index]
+    }
+
+    return nil
+  }
+
   func index(after index: Index, offset: Int = 1) -> Index?
   {
     var index = index

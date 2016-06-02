@@ -128,7 +128,7 @@ class Lexer : Sequence
             case "*"?:
               return lexMultilineComment()
             default:
-              return makeTokenAndAdvance(type: .Operator("/"))
+              return self.lexOperator()
           }
         case "#":
           return self.lexHash()
@@ -154,6 +154,23 @@ class Lexer : Sequence
   func advance()
   {
     self.index = self.characters.index(after: self.index)
+  }
+
+  func skipWhile(pred: (UnicodeScalar) -> Bool) -> Index
+  {
+    var index = self.index
+    while index != self.endIndex
+    {
+      if pred(self.characters[index])
+      {
+        index = self.characters.index(after: index)
+      }
+      else
+      {
+          break
+      }
+    }
+    return index
   }
 
   func advanceWhile(pred: (UnicodeScalar) -> Bool)
@@ -337,13 +354,32 @@ class Lexer : Sequence
     assert(self.currentChar!.isOperatorHead, "Not a valid starting point for an operator")
 
     let start = self.index
+    let allowDot = self.currentChar == "."
+    var error: String? = nil
 
     self.advance()
 
     while let char = self.currentChar
     {
+      if (!allowDot && char == ".")
+      {
+        break
+      }
       if char.isOperatorBody
       {
+        if char == "/"
+        {
+          if self.nextChar == "*" || self.nextChar == "/"
+          {
+            break
+          }
+
+          if self.prevChar == "*"
+          {
+            error = "unexpected end of block comment"
+          }
+        }
+
         self.advance()
       }
       else
@@ -353,6 +389,13 @@ class Lexer : Sequence
     }
 
     let content = String(self.characters[start..<self.index])
+
+    if error != nil
+    {
+        self.diagnose(error!, type: .Error, start: start, end: self.index)
+        return Token(type: .Unknown, content: content, range: start..<self.index)      
+    }
+
     let leftBound = self.isLeftBound(startIndex: start)
     let rightBound = self.isRightBound(endIndex: self.index, isLeftBound: leftBound)
 
@@ -362,27 +405,81 @@ class Lexer : Sequence
         if (leftBound != rightBound) {
           let d = diagnose("'=' must have consistent whitespace on both sides", type: .Error, start: start, end: self.index);
           if (leftBound) {
-            d.fixIts.append(Diagnose.FixIt(
-              range: start..<start,
-              replacement: " "
-            ))
+            d.withInsertFix(at: start, insert: " ")
           }
           else
           {
-            d.fixIts.append(Diagnose.FixIt(
-              range: self.index..<self.index,
-              replacement: " "
-            ))
+            d.withInsertFix(at: self.index, insert: " ")
           }
         }
+        return Token(type: .Punctuator("="), content: "=", range: start..<self.index)
+
+      case "&":
+        if (rightBound && !leftBound)
+        {
+          return Token(type: .Punctuator("&"), content: "&", range: start..<self.index)
+        }
+
+      case ".":
+        if (rightBound == leftBound)
+        {
+          return Token(type: .Punctuator("."), content: ".", range: start..<self.index)
+        }
+
+        if (rightBound)
+        {
+          return Token(type: .Punctuator(" ."), content: ".", range: start..<self.index)
+        }
+
+        let afterWhitespaceIndex = self.skipWhile
+        {
+          switch $0
+          {
+            case "\t", " ":
+              return true
+            default:
+              return false
+          }
+        }
+
+        if let char = self.source.character(at: afterWhitespaceIndex)
+        {
+          if (isRightBound(endIndex: afterWhitespaceIndex, isLeftBound: leftBound) && char != "/")
+          {
+            self.diagnose("extraneous whitespace after '.' is not permitted", type: .Error, start: self.index, end: afterWhitespaceIndex).withRemoveFix()
+            return Token(type: .Punctuator("."), content: ".", range: start..<self.index)
+          }
+        }
+
+        self.diagnose("expected member name following '.'", type: .Error, start: self.index)
+        return Token(type: .Unknown, content: content, range: self.index..<self.index)
+
+      case "?":
+        if (leftBound)
+        {
+          return Token(type: .Punctuator("?"), content: "?", range: start..<self.index)
+        }
+        return Token(type: .Punctuator("?:"), content: "?", range: start..<self.index)
+
+      case "->":
+        return Token(type: .Punctuator("->"), content: "->", range: start..<self.index)
+
+      case "*/":
+        self.diagnose("unexpected end of block comment", type: .Error, start: start, end: self.index)
+        return Token(type: .Unknown, content: content, range: start..<self.index)
+
       default:
         break
     }
-    return Token(
-      type: .Operator(content),
-      content: content,
-      range: start..<self.index
-    )
+
+    let type : TokenType
+      = leftBound == rightBound
+      ? .BinaryOperator(content)
+      : leftBound
+        ? .PostfixOperator(content)
+        : .PrefixOperator(content)
+
+    return Token(type: type, content: content, range: start..<self.index)
   }
 
   func lexHash() -> Token

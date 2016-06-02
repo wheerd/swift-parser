@@ -4,7 +4,9 @@ public enum TokenType
   case Unknown
   case EOF
   case Identifier(Bool)
-  case Operator(String)
+  case BinaryOperator(String)
+  case PrefixOperator(String)
+  case PostfixOperator(String)
   case IntegerLiteral
   case FloatLiteral
   case StringLiteral

@@ -54,6 +54,11 @@ class Diagnose
     return self.withFixIt(range: at..<at, replacement: insert)
   }
 
+  func withRemoveFix(range: Range<Index>? = nil) -> Diagnose
+  {
+    return self.withFixIt(range: range ?? self.range, replacement: "")
+  }
+
   func withNote(_ message: String, range: Range<Index>, source: Source? = nil) -> Diagnose
   {
     self.related.append(Diagnose(message, type: .Note, range: range, source: source ?? self.source))
