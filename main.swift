@@ -103,6 +103,22 @@ class Lexer : Sequence
     {
       switch char
       {
+        case "0":
+          if self.nextChar == "x"
+          {
+            return self.lexIntegerLiteral(type: .Binary, prefix: "x", numChars: Set("0123456789ABCDEF".unicodeScalars))
+          }
+          if self.nextChar == "o"
+          {
+            return self.lexIntegerLiteral(type: .Binary, prefix: "o", numChars: Set("01234567".unicodeScalars))
+          }
+          if self.nextChar == "b"
+          {
+            return self.lexIntegerLiteral(type: .Binary, prefix: "b", numChars: Set("01".unicodeScalars))
+          }
+          fallthrough
+        case "1"..."9":
+          return self.lexNumber()
         case "[", "]", "{", "}", "(", ")", ":", ",", ";":
           return makeTokenAndAdvance(type: TokenType(forPunctuator: String(char))!)
         case "\r":
@@ -202,7 +218,7 @@ class Lexer : Sequence
     self.advance()
     self.advance()
 
-    var depth = 1
+    var depth : Int = 1
     while let char = self.currentChar
     {
       if depth == 0
@@ -309,7 +325,6 @@ class Lexer : Sequence
 
     return Token(type: type, content: content, range: start..<self.index)
   }
-
 
   func lexDollarIdentifier() -> Token
   {
@@ -658,6 +673,36 @@ class Lexer : Sequence
       default:
         return true
     }
+  }
+
+  func lexIntegerLiteral(type: IntegerLiteralType, prefix: UnicodeScalar, numChars: Set<UnicodeScalar>) -> Token
+  {
+    assert(self.currentChar == "0", "Invalid starting point for integer literal")
+    assert(self.nextChar == prefix, "Invalid starting point for integer literal")
+
+    let start = self.index
+    self.advance()
+    self.advance()
+    let literalStart = self.index
+
+    if let char = self.currentChar where !numChars.contains(char)
+    {
+        self.diagnose("expected a digit after integer literal prefix", type: .Error, start: literalStart)
+        self.advanceWhile { $0.isIdentifierBody }
+
+        return makeToken(type: .Unknown, range: start..<self.index)      
+    }
+
+    self.advanceWhile { numChars.contains($0) || $0 == "_" }
+
+    let content = self.characters[literalStart..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
+
+    return Token(type: .IntegerLiteral(type), content: content, range: start..<self.index)
+  }
+
+  func lexNumber() -> Token
+  {
+    return makeTokenAndAdvance(type: .IntegerLiteral(.Decimal))
   }
 }
 

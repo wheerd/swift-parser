@@ -282,6 +282,11 @@ public enum HashConfigType : String
   }
 }
 
+public enum IntegerLiteralType
+{
+  case Decimal, Binary, Octal, Hexadecimal
+}
+
 public enum TokenType
 {
   case Unknown
@@ -291,7 +296,7 @@ public enum TokenType
   case BinaryOperator(String)
   case PrefixOperator(String)
   case PostfixOperator(String)
-  case IntegerLiteral
+  case IntegerLiteral(IntegerLiteralType)
   case FloatLiteral
   case StringLiteral
   case Comment(Bool)

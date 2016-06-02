@@ -152,7 +152,7 @@ extension String.UnicodeScalarView
 {
   func getCount(range: Range<String.UnicodeScalarView.Index>) -> Int
   {
-    var count = 0
+    var count : Int = 0
     var index = range.lowerBound
 
     while index != range.upperBound

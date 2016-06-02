@@ -97,7 +97,7 @@ class Source
   func getLine(index: Index) -> Int
   {
     var index = index
-    var line = 1
+    var line : Int = 1
     var lastWasLF = false
     while index != self.start
     {
@@ -123,7 +123,7 @@ class Source
   func getColumn(index: Index) -> Int
   {
     var index = index
-    var col = 1
+    var col : Int = 1
     while index != self.start
     {
       index = self.characters.index(before: index)
@@ -142,8 +142,8 @@ class Source
   {
     var index = index
     var endIndex = index
-    var col = 1
-    var line = 1
+    var col : Int = 1
+    var line : Int = 1
     var lastWasLF = false
 
     while index != self.start
