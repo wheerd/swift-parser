@@ -8,7 +8,7 @@ extension UnicodeScalar
       {
         switch self
         {
-          case "a"..."z", "A"..."Z", "_", "$":
+          case "a"..."z", "A"..."Z", "_":
             return true
           default:
             return false
@@ -42,7 +42,7 @@ extension UnicodeScalar
   {
     get
     {
-      if self.isIdentifierHead && self != "$"
+      if self.isIdentifierHead
       {
         return true
       }

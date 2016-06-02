@@ -104,7 +104,7 @@ class Lexer : Sequence
       switch char
       {
         case "[", "]", "{", "}", "(", ")", ":", ",", ";":
-          return makeTokenAndAdvance(type: .Punctuator(String(char)))
+          return makeTokenAndAdvance(type: TokenType(forPunctuator: String(char))!)
         case "\r":
           return lexNewline(isCRLF: self.nextChar == "\n")
         case "\n":
@@ -134,8 +134,10 @@ class Lexer : Sequence
           return self.lexHash()
         case "=", "-", "+", "*", ">", "&", "|", "^", "~", ".":
           return lexOperator();
-        case "a"..."z", "A"..."Z", "_", "$":
+        case "a"..."z", "A"..."Z", "_":
           return lexIdentifier()
+        case "$":
+          return lexDollarIdentifier()
         case "`":
           return lexEscapedIdentifier()
         default:
@@ -308,6 +310,48 @@ class Lexer : Sequence
     return Token(type: type, content: content, range: start..<self.index)
   }
 
+
+  func lexDollarIdentifier() -> Token
+  {
+    assert(self.currentChar == "$", "Not a valid starting point for a dollar identifier")
+
+    let start = self.index
+    var allDigits = true
+
+    self.advance()
+    let nameStart = self.index
+
+    charLoop: while let char = self.currentChar
+    {
+      switch char
+      {
+        case "0"..."9":
+          break
+        case "a"..."z", "A"..."Z":
+          allDigits = false
+        default:
+          break charLoop        
+      }
+
+      self.advance()
+    }
+
+
+    if nameStart == self.index
+    {
+      self.diagnose("expected numeric value following '$'", type: .Error, start: nameStart)
+      return makeToken(type: .Unknown, range: start..<self.index)
+    }
+    if !allDigits
+    {
+      self.diagnose("expected numeric value following '$'", type: .Error, start: nameStart, end: self.index)
+      return makeToken(type: .Identifier(false), range: start..<self.index)
+    }
+
+    let content = String(self.characters[nameStart..<self.index])
+    return Token(type: .DollarIdentifier, content: content, range: start..<self.index)
+  }
+
   func lexEscapedIdentifier() -> Token
   {
     assert(self.currentChar != nil, "Cannot lex identifier at EOF")
@@ -345,7 +389,7 @@ class Lexer : Sequence
     }
 
     self.index = start
-    return makeTokenAndAdvance(type: .Punctuator("`"))
+    return makeTokenAndAdvance(type: .Punctuator(.Backtick))
   }
 
   func lexOperator() -> Token
@@ -412,23 +456,23 @@ class Lexer : Sequence
             d.withInsertFix(at: self.index, insert: " ")
           }
         }
-        return Token(type: .Punctuator("="), content: "=", range: start..<self.index)
+        return Token(type: .Punctuator(.EqualSign), content: "=", range: start..<self.index)
 
       case "&":
         if (rightBound && !leftBound)
         {
-          return Token(type: .Punctuator("&"), content: "&", range: start..<self.index)
+          return Token(type: .Punctuator(.PrefixAmpersand), content: "&", range: start..<self.index)
         }
 
       case ".":
         if (rightBound == leftBound)
         {
-          return Token(type: .Punctuator("."), content: ".", range: start..<self.index)
+          return Token(type: .Punctuator(.Period), content: ".", range: start..<self.index)
         }
 
         if (rightBound)
         {
-          return Token(type: .Punctuator(" ."), content: ".", range: start..<self.index)
+          return Token(type: .Punctuator(.PrefixPeriod), content: ".", range: start..<self.index)
         }
 
         let afterWhitespaceIndex = self.skipWhile
@@ -447,7 +491,7 @@ class Lexer : Sequence
           if (isRightBound(endIndex: afterWhitespaceIndex, isLeftBound: leftBound) && char != "/")
           {
             self.diagnose("extraneous whitespace after '.' is not permitted", type: .Error, start: self.index, end: afterWhitespaceIndex).withRemoveFix()
-            return Token(type: .Punctuator("."), content: ".", range: start..<self.index)
+            return Token(type: .Punctuator(.Period), content: ".", range: start..<self.index)
           }
         }
 
@@ -457,12 +501,12 @@ class Lexer : Sequence
       case "?":
         if (leftBound)
         {
-          return Token(type: .Punctuator("?"), content: "?", range: start..<self.index)
+          return Token(type: .Punctuator(.PostfixQuestionMark), content: "?", range: start..<self.index)
         }
-        return Token(type: .Punctuator("?:"), content: "?", range: start..<self.index)
+        return Token(type: .Punctuator(.InfixQuestionMark), content: "?", range: start..<self.index)
 
       case "->":
-        return Token(type: .Punctuator("->"), content: "->", range: start..<self.index)
+        return Token(type: .Punctuator(.Arrow), content: "->", range: start..<self.index)
 
       case "*/":
         self.diagnose("unexpected end of block comment", type: .Error, start: start, end: self.index)
@@ -511,7 +555,7 @@ class Lexer : Sequence
     if self.index > nameStart
     {
       let name = String(self.characters[nameStart..<self.index])
-      if let type = TokenType(forPoundKeyword: name)
+      if let type = TokenType(forHashKeyword: name)
       {
         return Token(type: type, content: name, range: start..<self.index)
       }
@@ -519,7 +563,7 @@ class Lexer : Sequence
 
     self.index = start
 
-    return self.makeTokenAndAdvance(type: .Punctuator("#"))
+    return self.makeTokenAndAdvance(type: .Punctuator(.Hash))
   }
 
   func lexNewline(isCRLF: Bool = false) -> Token
