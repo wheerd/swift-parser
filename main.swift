@@ -8,9 +8,10 @@ class Lexer : Sequence
   let source : Source
   var index : Index
   var diagnoses = [Diagnose]()
-  let characters: String.UnicodeScalarView
-  let startIndex: Index
-  let endIndex: Index
+  let characters : String.UnicodeScalarView
+  let startIndex : Index
+  let endIndex : Index
+  var lastToken : Token? = nil
 
   var prevChar : UnicodeScalar?
   {
@@ -82,17 +83,15 @@ class Lexer : Sequence
 
   func makeIterator() -> AnyIterator<Token> {
     self.index = self.startIndex
-    var lastType : TokenType = .Unknown
 
-    return AnyIterator {
-      switch lastType
+    return AnyIterator { [weak self] in
+      switch self!.lastToken?.type
       {
-        case .EOF:
+        case .EOF?:
           return nil
         default:
-          let token = self.lexNextToken()
-          lastType = token.type
-          return token
+          self!.lastToken = self!.lexNextToken()
+          return self!.lastToken
       }
     }
   }
@@ -106,11 +105,11 @@ class Lexer : Sequence
         case "0":
           if self.nextChar == "x"
           {
-            return self.lexIntegerLiteral(type: .Binary, prefix: "x", numChars: Set("0123456789ABCDEF".unicodeScalars))
+            return self.lexHexNumberLiteral()
           }
           if self.nextChar == "o"
           {
-            return self.lexIntegerLiteral(type: .Binary, prefix: "o", numChars: Set("01234567".unicodeScalars))
+            return self.lexIntegerLiteral(type: .Octal, prefix: "o", numChars: Set("01234567".unicodeScalars))
           }
           if self.nextChar == "b"
           {
@@ -118,7 +117,7 @@ class Lexer : Sequence
           }
           fallthrough
         case "1"..."9":
-          return self.lexNumber()
+          return self.lexDecimalNumberLiteral()
         case "[", "]", "{", "}", "(", ")", ":", ",", ";":
           return makeTokenAndAdvance(type: TokenType(forPunctuator: String(char))!)
         case "\r":
@@ -687,7 +686,7 @@ class Lexer : Sequence
 
     if let char = self.currentChar where !numChars.contains(char)
     {
-        self.diagnose("expected a digit after integer literal prefix", type: .Error, start: literalStart)
+        self.diagnose("expected a digit after integer literal prefix", type: .Error)
         self.advanceWhile { $0.isIdentifierBody }
 
         return makeToken(type: .Unknown, range: start..<self.index)      
@@ -700,9 +699,126 @@ class Lexer : Sequence
     return Token(type: .IntegerLiteral(type), content: content, range: start..<self.index)
   }
 
-  func lexNumber() -> Token
+  func lexHexNumberLiteral() -> Token
   {
-    return makeTokenAndAdvance(type: .IntegerLiteral(.Decimal))
+    assert(self.currentChar == "0", "Invalid starting point for integer literal")
+    assert(self.nextChar == "x", "Invalid starting point for integer literal")
+
+    let start = self.index
+    self.advance()
+    self.advance()
+    let literalStart = self.index
+
+    if let char = self.currentChar where !char.isHexDigit
+    {
+        self.diagnose("expected a digit after integer literal prefix", type: .Error)
+        self.advanceWhile { $0.isIdentifierBody }
+
+        return makeToken(type: .Unknown, range: start..<self.index)      
+    }
+
+    self.advanceWhile { $0.isHexDigit || $0 == "_" }
+
+    if (currentChar != "." || !(nextChar?.isHexDigit ?? false)) && currentChar != "p" && currentChar != "P"
+    {
+      let content = self.characters[literalStart..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
+
+      return Token(type: .IntegerLiteral(.Hexadecimal), content: content, range: start..<self.index)      
+    }
+
+    if currentChar == "."
+    {
+      self.advance()
+      self.advanceWhile { $0.isHexDigit || $0 == "_" }
+
+      if self.currentChar != "p" && self.currentChar != "P"
+      {
+        self.diagnose("hexadecimal floating point literal must end with an exponent", type: .Error)       
+        return makeToken(type: .Unknown, range: start..<self.index) 
+      }
+    }
+
+    assert(self.currentChar == "p" || self.currentChar == "P", "Invalid starting point for integer literal")
+    self.advance()
+
+    if self.currentChar == "+" || self.currentChar == "-"
+    {
+      self.advance()
+    }
+
+    if let char = self.currentChar where !char.isDigit
+    {
+        self.diagnose("expected a digit in floating point exponent", type: .Error)
+
+        return makeToken(type: .Unknown, range: start..<self.index)      
+    }
+
+    self.advanceWhile { $0.isDigit || $0 == "_" }
+
+    let content = self.characters[literalStart..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
+
+    return Token(type: .FloatLiteral(.Hexadecimal), content: content, range: start..<self.index)
+  }
+
+  func lexDecimalNumberLiteral() -> Token
+  {
+    assert(self.currentChar?.isDigit ?? false, "Invalid starting point for a number literal")
+
+    let start = self.index
+
+    self.advanceWhile { $0.isDigit || $0 == "_" }
+
+    var isFloat = false
+    if currentChar == "."
+    {
+      isFloat = nextChar?.isDigit ?? false
+      if let lastType = self.lastToken?.type where lastType == TokenType.Punctuator(.Period)
+      {
+        isFloat = false
+      }
+    }
+    else if currentChar == "e" || currentChar == "E"
+    {
+      isFloat = true
+    }
+
+    print (isFloat, currentChar, nextChar)
+
+    if !isFloat
+    {
+      let content = self.characters[start..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
+
+      return Token(type: .IntegerLiteral(.Decimal), content: content, range: start..<self.index)      
+    }
+
+    if currentChar == "."
+    {
+      self.advance()
+      self.advanceWhile { $0.isDigit || $0 == "_" }
+    }
+
+    if currentChar == "e" || currentChar == "E"
+    {
+      self.advance()
+
+      if self.currentChar == "+" || self.currentChar == "-"
+      {
+        self.advance()
+      }
+
+      if let char = self.currentChar where !char.isDigit
+      {
+          self.diagnose("expected a digit in floating point exponent", type: .Error)
+
+          return makeToken(type: .Unknown, range: start..<self.index)      
+      }
+
+      self.advanceWhile { $0.isDigit || $0 == "_" }
+    }
+
+    let content = self.characters[start..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
+
+    return Token(type: .FloatLiteral(.Decimal), content: content, range: start..<self.index)
   }
 }
 

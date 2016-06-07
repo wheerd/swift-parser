@@ -114,6 +114,34 @@ extension UnicodeScalar
       }
     }
   }
+
+  var isDigit : Bool
+  {
+    get
+    {
+      switch self
+      {
+        case "0"..."9":
+          return true
+        default:
+          return false
+      }
+    }
+  }
+  
+  var isHexDigit : Bool
+  {
+    get
+    {
+      switch self
+      {
+        case "0"..."9", "a"..."f", "A"..."F":
+          return true
+        default:
+          return false
+      }
+    }
+  }
 }
 
 func * (str: String, times: Int) -> String

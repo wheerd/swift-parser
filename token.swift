@@ -287,6 +287,11 @@ public enum IntegerLiteralType
   case Decimal, Binary, Octal, Hexadecimal
 }
 
+public enum FloatLiteralType
+{
+  case Decimal, Hexadecimal
+}
+
 public enum TokenType
 {
   case Unknown
@@ -297,7 +302,7 @@ public enum TokenType
   case PrefixOperator(String)
   case PostfixOperator(String)
   case IntegerLiteral(IntegerLiteralType)
-  case FloatLiteral
+  case FloatLiteral(FloatLiteralType)
   case StringLiteral
   case Comment(Bool)
   case Whitespace
@@ -359,9 +364,39 @@ public enum TokenType
   }
 }
 
+extension TokenType : Equatable {}
+
+public func ==(a: TokenType, b: TokenType) -> Bool
+{
+  switch (a, b)
+  {      
+      case (.Unknown,                   .Unknown):                                return true
+      case (.EOF,                       .EOF):                                    return true
+      case (.DollarIdentifier,          .DollarIdentifier):                       return true
+      case (.StringLiteral,             .StringLiteral):                          return true
+      case (.Whitespace,                .Whitespace):                             return true
+      case (.Newline,                   .Newline):                                return true
+      case (.Hashbang,                  .Hashbang):                               return true
+      case (.Identifier(let a),         .Identifier(let b))         where a == b: return true
+      case (.BinaryOperator(let a),     .BinaryOperator(let b))     where a == b: return true
+      case (.PrefixOperator(let a),     .PrefixOperator(let b))     where a == b: return true
+      case (.PostfixOperator(let a),    .PostfixOperator(let b))    where a == b: return true
+      case (.IntegerLiteral(let a),     .IntegerLiteral(let b))     where a == b: return true
+      case (.FloatLiteral(let a),       .FloatLiteral(let b))       where a == b: return true
+      case (.Comment(let a),            .Comment(let b))            where a == b: return true
+      case (.Keyword(let a),            .Keyword(let b))            where a == b: return true
+      case (.StatementKeyword(let a),   .StatementKeyword(let b))   where a == b: return true
+      case (.DeclarationKeyword(let a), .DeclarationKeyword(let b)) where a == b: return true
+      case (.HashKeyword(let a),        .HashKeyword(let b))        where a == b: return true
+      case (.HashConfig(let a),         .HashConfig(let b))         where a == b: return true
+      case (.Punctuator(let a),         .Punctuator(let b))         where a == b: return true
+      default: return false
+  }
+}
+
 public struct Token
 {
-    let type: TokenType
-    let content: String
-    let range: Range<String.UnicodeScalarView.Index>
+  let type: TokenType
+  let content: String
+  let range: Range<String.UnicodeScalarView.Index>
 }
