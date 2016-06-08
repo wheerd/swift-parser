@@ -157,12 +157,36 @@ class Lexer : Sequence
           return lexEscapedIdentifier()
         case "\"", "'":
           return lexStringLiteral()
+        case "\u{201D}":
+          diagnose("unicode curly quote found, replace with '\"'", type: .Error, end: self.characters.index(after:self.index))
+            .withReplaceFix("\"")
+          return makeTokenAndAdvance(type: .Unknown)
+        case "\u{201C}":
+          if let endIndex = self.findEndOfCurlyQuoteStringLiteral()
+          {
+            let startIndex = self.index
+            self.index = endIndex
+            return makeToken(type: .Unknown, range: startIndex..<endIndex)
+          }
+          return makeTokenAndAdvance(type: .Unknown)
         default:
           if char.isIdentifierHead
           {
-              return self.lexIdentifier()
+            return self.lexIdentifier()
+          }
+          if char.isOperatorHead
+          {
+            return self.lexOperator()
+          }
+          if char.isIdentifierBody
+          {
+            let start = self.index
+            self.advanceWhile { $0.isIdentifierBody }
+            return makeToken(type: .Unknown, range: start..<self.index)
           }
 
+          diagnose("invalid character in source file", type: .Error, end: self.characters.index(after:self.index))
+            .withReplaceFix(" ")
           return makeTokenAndAdvance(type: .Unknown)
       }
     }
@@ -271,7 +295,7 @@ class Lexer : Sequence
       }
 
       diagnose("unterminated '/*' comment", type: .Error, start: endIndex)
-        .withInsertFix(insert: "*/" * depth, at: endIndex)
+        .withInsertFix("*/" * depth, at: endIndex)
         .withNote("comment started here", range: start..<start)
     }
 
@@ -465,11 +489,11 @@ class Lexer : Sequence
         if (leftBound != rightBound) {
           let d = diagnose("'=' must have consistent whitespace on both sides", type: .Error, start: start, end: self.index)
           if (leftBound) {
-            d.withInsertFix(insert: " ", at: start)
+            d.withInsertFix(" ", at: start)
           }
           else
           {
-            d.withInsertFix(insert: " ", at: self.index)
+            d.withInsertFix(" ", at: self.index)
           }
         }
         return Token(type: .Punctuator(.EqualSign), content: "=", range: start..<self.index)
@@ -823,7 +847,7 @@ class Lexer : Sequence
     return Token(type: .FloatLiteral(.Decimal), content: content, range: start..<self.index)
   }
 
-  func lexUnicodeEscape() -> UnicodeScalar?
+  func lexUnicodeEscape() throws -> UnicodeScalar
   {
     assert(self.currentChar == "{", "Invalid unicode escape")
     self.advance()
@@ -840,15 +864,13 @@ class Lexer : Sequence
 
     if self.currentChar != "}"
     {
-      diagnose("expected '}' in \\u{...} escape sequence", type: .Error)
-      return nil
+      throw Diagnose("expected '}' in \\u{...} escape sequence", type: .Error, at: self.index, source: self.source)
     }
     self.advance()
 
     if numDigits < 1 || numDigits > 8
     {
-      diagnose("\\u{...} escape sequence expects between 1 and 8 hex digits", type: .Error)
-      return nil
+      throw Diagnose("\\u{...} escape sequence expects between 1 and 8 hex digits", type: .Error, at: self.index, source: self.source)
     }
 
     return UnicodeScalar(hexValue)
@@ -887,6 +909,61 @@ class Lexer : Sequence
     return replacement
   }
 
+  enum StringEnd : ErrorProtocol
+  {
+    case End
+  }
+
+  func lexCharacter(quoteType: UnicodeScalar) throws -> UnicodeScalar
+  {    
+    assert(self.currentChar != nil, "Cannot lex character at end of source")
+
+    var char : UnicodeScalar = "\0"
+
+    switch self.currentChar!
+    {
+      case "\\":
+        self.advance()
+        guard self.nextChar != nil else
+        {
+          throw Diagnose("invalid escape sequence in literal", type: .Error, at: self.index, source: self.source)
+        }
+        switch self.currentChar!
+        {
+          case "\\", "\"", "'":
+            char = self.currentChar!
+          case "t":
+            char = "\t"
+          case "n":
+            char = "\n"
+          case "r":
+            char = "\r"
+          case "0":
+            char = "\0"
+          case "u":
+            self.advance()
+            if self.currentChar != "{"
+            {
+              throw Diagnose("expected hexadecimal code in braces after unicode escape", type: .Error, at: self.index, source: self.source)
+            }
+            
+            return try self.lexUnicodeEscape()
+          default:
+            throw Diagnose("invalid escape sequence in literal", type: .Error, at: self.index, source: self.source)
+        }
+      case "\"", "'":
+        if self.currentChar! == quoteType
+        {
+          throw StringEnd.End         
+        }
+        fallthrough
+      default:
+        char = self.currentChar!
+    }
+    self.advance()
+    return char
+  }
+
   func lexStringLiteral() -> Token
   {
     assert(self.currentChar == "\"" || self.currentChar == "\'", "Invalid starting point for a string literal")
@@ -901,68 +978,25 @@ class Lexer : Sequence
 
     characterLoop: while true
     {
-      guard self.currentChar != nil else
+      guard self.currentChar != nil && self.currentChar != "\r" && self.currentChar != "\n"else
       {
         diagnose("unterminated string literal", type: .Error)
         return makeToken(type: .Unknown, range: start..<self.index)        
       }
 
-      switch self.currentChar!
+      do
       {
-        case "\r", "\n":
-          diagnose("unterminated string literal", type: .Error)
-          return makeToken(type: .Unknown, range: start..<self.index)
-        case "\\":
-          guard self.nextChar != nil else
-          {
-            diagnose("unterminated string literal", type: .Error)
-            return makeToken(type: .Unknown, range: start..<self.index)  
-          }
-          switch self.nextChar!
-          {
-            case "\\", "\"", "'":
-              content += String(self.nextChar!)
-            case "t":
-              content += "\t"
-            case "n":
-              content += "\t"
-            case "r":
-              content += "\t"
-            case "0":
-              content += "\0"
-            case "u":
-              self.advance()
-              self.advance()
-              if self.currentChar != "{"
-              {
-                diagnose("expected hexadecimal code in braces after unicode escape", type: .Error)
-                wasErroneous = true
-              }
-              else if let char = self.lexUnicodeEscape()
-              {
-                content += String(char)                
-              }
-              else
-              {                
-                wasErroneous = true
-              }
-              continue characterLoop
-            default:
-              diagnose("invalid escape sequence in literal", type: .Error)
-              wasErroneous = true
-          }
-          self.advance()
-        case "\"", "'":
-          if self.currentChar! == quoteType
-          {
-            break characterLoop            
-          }
-          fallthrough
-        default:
-          content += String(self.currentChar!)
+        content += String(try self.lexCharacter(quoteType: quoteType)) 
       }
-
-      self.advance()
+      catch StringEnd.End
+      {
+        break characterLoop
+      }
+      catch let diag
+      {
+        self.diagnoses.append(diag as! Diagnose)
+        wasErroneous = true
+      }
     }
 
     self.advance()
@@ -974,10 +1008,60 @@ class Lexer : Sequence
       let replacement = "\"\(makeDoubleQuotedLiteral(singleQuoted: str))\""
 
       diagnose("single-quoted string literal found, use '\"'", type: .Error, start: start, end: self.index)
-        .withFixIt(replacement: replacement)
+        .withReplaceFix(replacement)
     }
 
     return Token(type: wasErroneous ? .Unknown : .StringLiteral, content: content, range: start..<self.index)
+  }
+
+  func findEndOfCurlyQuoteStringLiteral() -> Index?
+  {
+    let oldIndex = self.index
+    while (true)
+    {
+      // Don"t bother with string interpolations.
+      if self.currentChar == "\\" && self.nextChar  == "("
+      {        
+        return nil
+      }
+
+      // We didn"t find the end of the string literal if we ran to end of line.
+      if self.currentChar == "\r" || self.currentChar == "\n" || self.currentChar == nil
+      {
+        return nil
+      }
+
+      do
+      {
+        let index = self.index
+        let char = try lexCharacter(quoteType: "\"")
+
+        // If we found an ending curly quote (common since this thing started with
+        // an opening curly quote) diagnose it with a fixit and then return.
+        if char == "\u{201D}"
+        {
+          diagnose("unicode curly quote found, replace with '\"'", type: .Error, start: oldIndex)
+            .withReplaceFix("\"", range: oldIndex..<self.characters.index(after: oldIndex))
+            .withReplaceFix("\"", range: index..<self.index)
+
+          let endIndex = self.index
+          self.index = oldIndex
+          return endIndex
+        }
+      }
+      catch StringEnd.End
+      {
+        let endIndex = self.index
+        self.index = oldIndex
+        return endIndex
+      }
+      catch
+      {
+        return nil
+      }
+      
+      // Otherwise, keep scanning.
+    }
   }
 }
 

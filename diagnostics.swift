@@ -1,4 +1,4 @@
-class Diagnose
+class Diagnose : ErrorProtocol
 {
   typealias Index = String.UnicodeScalarView.Index
 
@@ -28,6 +28,11 @@ class Diagnose
     self.source = source
   }
 
+  convenience init(_ message: String, type: DiagnoseType, at: Index, source: Source)
+  {
+    self.init(message, type: type, range: at..<at, source: source)
+  }
+
   func getLine() -> Int
   {
     return self.source.getLine(index: self.range.lowerBound)
@@ -43,20 +48,20 @@ class Diagnose
     return self.source.getContext(index: self.range.lowerBound)
   }
 
-  func withFixIt(replacement: String, range: Range<Index>? = nil) -> Diagnose
+  func withReplaceFix(_ replacement: String, range: Range<Index>? = nil) -> Diagnose
   {
     self.fixIts.append(FixIt(range: range ?? self.range, replacement: replacement))
     return self
   }
 
-  func withInsertFix(insert: String, at: Index) -> Diagnose
+  func withInsertFix(_ insert: String, at: Index) -> Diagnose
   {
-    return self.withFixIt(replacement: insert, range: at..<at)
+    return self.withReplaceFix(insert, range: at..<at)
   }
 
-  func withRemoveFix(range: Range<Index>? = nil) -> Diagnose
+  func withRemoveFix(_ range: Range<Index>? = nil) -> Diagnose
   {
-    return self.withFixIt(replacement: "", range: range ?? self.range)
+    return self.withReplaceFix("", range: range ?? self.range)
   }
 
   func withNote(_ message: String, range: Range<Index>, source: Source? = nil) -> Diagnose
