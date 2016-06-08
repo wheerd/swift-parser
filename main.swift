@@ -148,13 +148,15 @@ class Lexer : Sequence
         case "#":
           return self.lexHash()
         case "=", "-", "+", "*", ">", "&", "|", "^", "~", ".":
-          return lexOperator();
+          return lexOperator()
         case "a"..."z", "A"..."Z", "_":
           return lexIdentifier()
         case "$":
           return lexDollarIdentifier()
         case "`":
           return lexEscapedIdentifier()
+        case "\"", "'":
+          return lexStringLiteral()
         default:
           if char.isIdentifierHead
           {
@@ -269,7 +271,7 @@ class Lexer : Sequence
       }
 
       diagnose("unterminated '/*' comment", type: .Error, start: endIndex)
-        .withInsertFix(at: endIndex, insert: "*/" * depth)
+        .withInsertFix(insert: "*/" * depth, at: endIndex)
         .withNote("comment started here", range: start..<start)
     }
 
@@ -461,13 +463,13 @@ class Lexer : Sequence
     {
       case "=":
         if (leftBound != rightBound) {
-          let d = diagnose("'=' must have consistent whitespace on both sides", type: .Error, start: start, end: self.index);
+          let d = diagnose("'=' must have consistent whitespace on both sides", type: .Error, start: start, end: self.index)
           if (leftBound) {
-            d.withInsertFix(at: start, insert: " ")
+            d.withInsertFix(insert: " ", at: start)
           }
           else
           {
-            d.withInsertFix(at: self.index, insert: " ")
+            d.withInsertFix(insert: " ", at: self.index)
           }
         }
         return Token(type: .Punctuator(.EqualSign), content: "=", range: start..<self.index)
@@ -820,6 +822,163 @@ class Lexer : Sequence
 
     return Token(type: .FloatLiteral(.Decimal), content: content, range: start..<self.index)
   }
+
+  func lexUnicodeEscape() -> UnicodeScalar?
+  {
+    assert(self.currentChar == "{", "Invalid unicode escape")
+    self.advance()
+
+    var hexValue : UInt32 = 0
+    var numDigits : UInt  = 0
+
+    while let digitValue = self.currentChar?.hexValue
+    {
+      hexValue = (hexValue << 4) | digitValue
+      numDigits += 1
+      self.advance()
+    }
+
+    if self.currentChar != "}"
+    {
+      diagnose("expected '}' in \\u{...} escape sequence", type: .Error)
+      return nil
+    }
+    self.advance()
+
+    if numDigits < 1 || numDigits > 8
+    {
+      diagnose("\\u{...} escape sequence expects between 1 and 8 hex digits", type: .Error)
+      return nil
+    }
+
+    return UnicodeScalar(hexValue)
+  }
+
+  func makeDoubleQuotedLiteral(singleQuoted: String) -> String
+  {
+    var replacement = ""
+    var i = singleQuoted.startIndex
+
+    while i != singleQuoted.endIndex
+    {
+      var nextIndex = singleQuoted.index(after: i)
+
+      if singleQuoted[i] == "\""
+      {
+        replacement += "\\\""            
+      }
+      else if nextIndex != singleQuoted.endIndex && singleQuoted[i] == "\\"
+      {
+        if singleQuoted[nextIndex] != "'"
+        {          
+          replacement += String(singleQuoted[i])
+        }
+        replacement += String(singleQuoted[nextIndex])
+        nextIndex = singleQuoted.index(after: nextIndex)
+      }
+      else if nextIndex == singleQuoted.endIndex || singleQuoted[i] != "\\" || singleQuoted[nextIndex] != "'"
+      {
+        replacement += String(singleQuoted[i])
+      }
+
+      i = nextIndex
+    }
+
+    return replacement
+  }
+
+  func lexStringLiteral() -> Token
+  {
+    assert(self.currentChar == "\"" || self.currentChar == "\'", "Invalid starting point for a string literal")
+
+    let quoteType = self.currentChar!
+    let start = self.index
+    var wasErroneous = false
+    var content = ""
+    
+    self.advance()
+    let charactersStartIndex = self.index
+
+    characterLoop: while true
+    {
+      guard self.currentChar != nil else
+      {
+        diagnose("unterminated string literal", type: .Error)
+        return makeToken(type: .Unknown, range: start..<self.index)        
+      }
+
+      switch self.currentChar!
+      {
+        case "\r", "\n":
+          diagnose("unterminated string literal", type: .Error)
+          return makeToken(type: .Unknown, range: start..<self.index)
+        case "\\":
+          guard self.nextChar != nil else
+          {
+            diagnose("unterminated string literal", type: .Error)
+            return makeToken(type: .Unknown, range: start..<self.index)  
+          }
+          switch self.nextChar!
+          {
+            case "\\", "\"", "'":
+              content += String(self.nextChar!)
+            case "t":
+              content += "\t"
+            case "n":
+              content += "\t"
+            case "r":
+              content += "\t"
+            case "0":
+              content += "\0"
+            case "u":
+              self.advance()
+              self.advance()
+              if self.currentChar != "{"
+              {
+                diagnose("expected hexadecimal code in braces after unicode escape", type: .Error)
+                wasErroneous = true
+              }
+              else if let char = self.lexUnicodeEscape()
+              {
+                content += String(char)                
+              }
+              else
+              {                
+                wasErroneous = true
+              }
+              continue characterLoop
+            default:
+              diagnose("invalid escape sequence in literal", type: .Error)
+              wasErroneous = true
+          }
+          self.advance()
+        case "\"", "'":
+          if self.currentChar! == quoteType
+          {
+            break characterLoop            
+          }
+          fallthrough
+        default:
+          content += String(self.currentChar!)
+      }
+
+      self.advance()
+    }
+
+    self.advance()
+
+    if quoteType == "'"
+    {
+      let charactersEndIndex = self.characters.index(before: self.index)
+      let str = String(self.characters[charactersStartIndex..<charactersEndIndex])
+      let replacement = "\"\(makeDoubleQuotedLiteral(singleQuoted: str))\""
+
+      diagnose("single-quoted string literal found, use '\"'", type: .Error, start: start, end: self.index)
+        .withFixIt(replacement: replacement)
+    }
+
+    return Token(type: wasErroneous ? .Unknown : .StringLiteral, content: content, range: start..<self.index)
+  }
 }
 
 func relativePath(_ path: String) -> String?
@@ -831,14 +990,7 @@ if let source = Source(path: relativePath("tests/test.swift")!)
 {
     var l = Lexer(source)
 
-    for token in l.filter({
-        switch $0.type {
-          case .Whitespace:
-            return false
-          default:
-            return true
-        }
-      })
+    for token in l.filter({ $0.type != .Whitespace })
     {
       print("\(token.type): \(token.content.literalString)")
     }

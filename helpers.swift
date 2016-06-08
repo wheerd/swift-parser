@@ -1,3 +1,7 @@
+private let zero : UnicodeScalar = "0"
+private let lowerA : UnicodeScalar = "a"
+private let upperA : UnicodeScalar = "A"
+
 extension UnicodeScalar
 {
   var isIdentifierHead : Bool
@@ -139,6 +143,32 @@ extension UnicodeScalar
           return true
         default:
           return false
+      }
+    }
+  }
+  
+  var decimalValue : UInt32?
+  {
+    get
+    {
+      return self.isDigit ? ((self.value - zero.value) as UInt32?) : nil
+    }
+  }
+
+  var hexValue : UInt32?
+  {
+    get
+    {
+      switch self
+      {
+        case "0"..."9":
+          return self.value - zero.value
+        case "a"..."f":
+          return 10 + self.value - lowerA.value
+        case "A"..."F":
+          return 10 + self.value - upperA.value
+        default:
+          return nil
       }
     }
   }

@@ -43,20 +43,20 @@ class Diagnose
     return self.source.getContext(index: self.range.lowerBound)
   }
 
-  func withFixIt(range: Range<Index>, replacement: String) -> Diagnose
+  func withFixIt(replacement: String, range: Range<Index>? = nil) -> Diagnose
   {
-    self.fixIts.append(FixIt(range: range, replacement: replacement))
+    self.fixIts.append(FixIt(range: range ?? self.range, replacement: replacement))
     return self
   }
 
-  func withInsertFix(at: Index, insert: String) -> Diagnose
+  func withInsertFix(insert: String, at: Index) -> Diagnose
   {
-    return self.withFixIt(range: at..<at, replacement: insert)
+    return self.withFixIt(replacement: insert, range: at..<at)
   }
 
   func withRemoveFix(range: Range<Index>? = nil) -> Diagnose
   {
-    return self.withFixIt(range: range ?? self.range, replacement: "")
+    return self.withFixIt(replacement: "", range: range ?? self.range)
   }
 
   func withNote(_ message: String, range: Range<Index>, source: Source? = nil) -> Diagnose
