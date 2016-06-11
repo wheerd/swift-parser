@@ -10,8 +10,12 @@ class Lexer : Sequence
   var diagnoses = [Diagnose]()
   let characters : String.UnicodeScalarView
   let startIndex : Index
-  let endIndex : Index
+  let endIndex : Index  
   var lastToken : Token? = nil
+
+  private var parenthesisDepth : Int
+  private var subLexer : Lexer? = nil
+  private var interpoledStringQuoteType : UnicodeScalar? = nil
 
   var prevChar : UnicodeScalar?
   {
@@ -55,14 +59,20 @@ class Lexer : Sequence
     }
   }
 
-  init(_ source: Source)
+  convenience init(_ source: Source)
+  {
+    self.init(source, parenthesisDepth: 0)
+  }
+
+  init(_ source: Source, parenthesisDepth: Int, startIndex: Index? = nil, endIndex: Index? = nil, currentIndex: Index? = nil)
   {
     self.source = source
     self.characters = source.characters
-    self.startIndex = source.start
-    self.endIndex = source.end
+    self.startIndex = startIndex ?? source.start
+    self.endIndex = endIndex ?? source.end
 
-    self.index = source.start
+    self.index = currentIndex ?? startIndex ?? source.start
+    self.parenthesisDepth = parenthesisDepth
   }
 
   func diagnose(_ message: String, type: Diagnose.DiagnoseType, start: Index? = nil, end: Index? = nil) -> Diagnose
@@ -98,6 +108,36 @@ class Lexer : Sequence
 
   func lexNextToken() -> Token
   {
+    if let subLexer = self.subLexer
+    {
+      let oldIndex = subLexer.index
+      let token = subLexer.lexNextToken()
+
+      if token.type == .Newline || token.type == .EOF
+      {
+        self.index = subLexer.index
+        self.subLexer = nil
+        self.interpoledStringQuoteType = nil
+
+        diagnose("unterminated string literal", type: .Error, start: oldIndex)
+        return token   
+      }
+
+      if let quoteType = self.interpoledStringQuoteType
+      {
+        if subLexer.parenthesisDepth == 0
+        {
+          self.index = oldIndex
+          self.subLexer = nil
+          self.interpoledStringQuoteType = nil
+
+          return self.lexStringLiteral(quoteType: quoteType, interpolated: true)
+        }        
+      }
+
+      return token
+    }
+
     while let char = self.currentChar
     {
       switch char
@@ -118,7 +158,10 @@ class Lexer : Sequence
           fallthrough
         case "1"..."9":
           return self.lexDecimalNumberLiteral()
-        case "[", "]", "{", "}", "(", ")", ":", ",", ";":
+        case "(", ")":
+          self.parenthesisDepth += char == "(" ? 1 : -1
+          fallthrough
+        case "[", "]", "{", "}", ":", ",", ";":
           return makeTokenAndAdvance(type: TokenType(forPunctuator: String(char))!)
         case "\r":
           return lexNewline(isCRLF: self.nextChar == "\n")
@@ -156,7 +199,7 @@ class Lexer : Sequence
         case "`":
           return lexEscapedIdentifier()
         case "\"", "'":
-          return lexStringLiteral()
+          return lexStringLiteral(quoteType: self.currentChar!, interpolated: false)
         case "\u{201D}":
           diagnose("unicode curly quote found, replace with '\"'", type: .Error, end: self.characters.index(after:self.index))
             .withReplaceFix("\"")
@@ -700,7 +743,7 @@ class Lexer : Sequence
     }
   }
 
-  func lexIntegerLiteral(type: IntegerLiteralType, prefix: UnicodeScalar, numChars: Set<UnicodeScalar>) -> Token
+  func lexIntegerLiteral(type: IntegerLiteralKind, prefix: UnicodeScalar, numChars: Set<UnicodeScalar>) -> Token
   {
     assert(self.currentChar == "0", "Invalid starting point for integer literal")
     assert(self.nextChar == prefix, "Invalid starting point for integer literal")
@@ -807,8 +850,6 @@ class Lexer : Sequence
     {
       isFloat = true
     }
-
-    print (isFloat, currentChar, nextChar)
 
     if !isFloat
     {
@@ -964,13 +1005,13 @@ class Lexer : Sequence
     return char
   }
 
-  func lexStringLiteral() -> Token
+  func lexStringLiteral(quoteType: UnicodeScalar, interpolated: Bool) -> Token
   {
-    assert(self.currentChar == "\"" || self.currentChar == "\'", "Invalid starting point for a string literal")
+    assert(interpolated || self.currentChar == "\"" || self.currentChar == "\'", "Invalid starting point for a string literal")
+    assert(!interpolated || self.currentChar == ")", "Invalid starting point for an interpolated string literal")
 
-    let quoteType = self.currentChar!
     let start = self.index
-    var wasErroneous = false
+    var wasErroneous : Bool = false
     var content = ""
     
     self.advance()
@@ -982,6 +1023,20 @@ class Lexer : Sequence
       {
         diagnose("unterminated string literal", type: .Error)
         return makeToken(type: .Unknown, range: start..<self.index)        
+      }
+
+      if self.currentChar == "\\" && self.nextChar == "("
+      {
+        self.advance()
+        self.advance()
+
+        let type : TokenType = wasErroneous ? .Unknown : .StringLiteral(interpolated ? .InterpolatedMiddle : .InterpolatedStart)
+        let token = Token(type: type, content: content, range: start..<self.index)
+
+        self.subLexer = Lexer(self.source, parenthesisDepth: 1, startIndex: self.index)
+        self.interpoledStringQuoteType = quoteType
+
+        return token
       }
 
       do
@@ -1011,7 +1066,8 @@ class Lexer : Sequence
         .withReplaceFix(replacement)
     }
 
-    return Token(type: wasErroneous ? .Unknown : .StringLiteral, content: content, range: start..<self.index)
+    let type : TokenType = wasErroneous ? .Unknown : .StringLiteral(interpolated ? .InterpolatedEnd : .Static)
+    return Token(type: type, content: content, range: start..<self.index)
   }
 
   func findEndOfCurlyQuoteStringLiteral() -> Index?

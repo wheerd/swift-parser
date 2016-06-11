@@ -1,11 +1,4 @@
+"foo\(5)bar"
+"foo\(5*(8+b)bar
+"foo\n\("x\n")bar\t"
 "foobar"
-'fubar blubb \' " bar\"\\\t'
-"\u"
-"\u{"
-"\u{1"
-"\u{}"
-"\u{FX"
-"\u{20}"
-"\u{20}"
-"\u{20X}"
-"\u{FFFFFFFFF}"

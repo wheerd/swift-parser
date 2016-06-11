@@ -282,14 +282,19 @@ public enum HashConfigType : String
   }
 }
 
-public enum IntegerLiteralType
+public enum IntegerLiteralKind
 {
   case Decimal, Binary, Octal, Hexadecimal
 }
 
-public enum FloatLiteralType
+public enum FloatLiteralKind
 {
   case Decimal, Hexadecimal
+}
+
+public enum StringLiteralKind
+{
+  case Static, InterpolatedStart, InterpolatedMiddle, InterpolatedEnd
 }
 
 public enum TokenType
@@ -301,9 +306,9 @@ public enum TokenType
   case BinaryOperator(String)
   case PrefixOperator(String)
   case PostfixOperator(String)
-  case IntegerLiteral(IntegerLiteralType)
-  case FloatLiteral(FloatLiteralType)
-  case StringLiteral
+  case IntegerLiteral(IntegerLiteralKind)
+  case FloatLiteral(FloatLiteralKind)
+  case StringLiteral(StringLiteralKind)
   case Comment(Bool)
   case Whitespace
   case Newline
