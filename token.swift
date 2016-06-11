@@ -1,5 +1,5 @@
-public enum PunctuatorType : String
-{
+public enum PunctuatorType: String {
+
   case LeftParenthesis   = "("
   case LRightParenthesis = ")"
   case LeftBrace         = "{"
@@ -25,10 +25,11 @@ public enum PunctuatorType : String
 
   case PostfixQuestionMark     = "? " // if left-bound
   case InfixQuestionMark       = " ?" // if not left-bound
+
 }
 
-public enum StatementKeywordType : String
-{
+public enum StatementKeywordType: String {
+
   case Defer
   case If
   case Guard
@@ -48,10 +49,8 @@ public enum StatementKeywordType : String
   case Where
   case Catch
 
-  init?(string: String)
-  {    
-    switch string
-    {
+  init?(string: String) {
+    switch string {
       case "defer":
         self = .Defer
       case "if":
@@ -93,10 +92,11 @@ public enum StatementKeywordType : String
         return nil
     }
   }
+
 }
 
-public enum KeywordType : String
-{
+public enum KeywordType: String {
+
   case As
   case DynamicType
   case False
@@ -104,17 +104,15 @@ public enum KeywordType : String
   case Nil
   case Rethrows
   case Super
-  case `self`
-  case `Self`
+  case LowerCaseSelf
+  case UpperCaseSelf
   case Throw
   case True
   case Try
   case Throws
 
-  init?(string: String)
-  {    
-    switch string
-    {
+  init?(string: String) {
+    switch string {
       case "as":
         self = .As
       case "dynamicType":
@@ -130,9 +128,9 @@ public enum KeywordType : String
       case "super":
         self = .Super
       case "self":
-        self = .`self`
+        self = .LowerCaseSelf
       case "Self":
-        self = .`Self`
+        self = .UpperCaseSelf
       case "throw":
         self = .Throw
       case "true":
@@ -146,10 +144,11 @@ public enum KeywordType : String
         return nil
     }
   }
+
 }
 
-public enum DeclarationKeywordType : String
-{
+public enum DeclarationKeywordType: String {
+
   case Class
   case Deinit
   case Enum
@@ -160,7 +159,7 @@ public enum DeclarationKeywordType : String
   case InOut
   case Let
   case Operator
-  case `Protocol`
+  case ProtocolKeyword
   case Struct
   case Subscript
   case TypeAlias
@@ -172,10 +171,8 @@ public enum DeclarationKeywordType : String
   case Public
   case Static
 
-  init?(string: String)
-  {    
-    switch string
-    {
+  init?(string: String) {
+    switch string {
       case "class":
         self = .Class
       case "deinit":
@@ -197,7 +194,7 @@ public enum DeclarationKeywordType : String
       case "operator":
         self = .Operator
       case "protocol":
-        self = .`Protocol`
+        self = .ProtocolKeyword
       case "struct":
         self = .Struct
       case "subscript":
@@ -222,10 +219,11 @@ public enum DeclarationKeywordType : String
         return nil
     }
   }
+
 }
 
-public enum HashKeywordType : String
-{
+public enum HashKeywordType: String {
+
   case Column
   case File
   case Function
@@ -236,10 +234,8 @@ public enum HashKeywordType : String
   case If
   case Selector
 
-  init?(string: String)
-  {    
-    switch string
-    { 
+  init?(string: String) {
+    switch string {
       case "column":
         self = .Column
       case "file":
@@ -263,16 +259,15 @@ public enum HashKeywordType : String
         return nil
     }
   }
+
 }
 
-public enum HashConfigType : String
-{
+public enum HashConfigType: String {
+
   case Availiable
 
-  init?(string: String)
-  {    
-    switch string
-    { 
+  init?(string: String) {
+    switch string {
       case "availiable":
         self = .Availiable
 
@@ -280,25 +275,23 @@ public enum HashConfigType : String
         return nil
     }
   }
+
 }
 
-public enum IntegerLiteralKind
-{
+public enum IntegerLiteralKind {
   case Decimal, Binary, Octal, Hexadecimal
 }
 
-public enum FloatLiteralKind
-{
+public enum FloatLiteralKind {
   case Decimal, Hexadecimal
 }
 
-public enum StringLiteralKind
-{
+public enum StringLiteralKind {
   case Static, InterpolatedStart, InterpolatedMiddle, InterpolatedEnd
 }
 
-public enum TokenType
-{
+public enum TokenType {
+
   case Unknown
   case EOF
   case Identifier(Bool)
@@ -320,61 +313,49 @@ public enum TokenType
   case Punctuator(PunctuatorType)
   case Hashbang
 
-  init?(forPunctuator punctuator: String)
-  {
-    if let type = PunctuatorType(rawValue: punctuator)
-    {
+  init?(forPunctuator punctuator: String) {
+    if let type = PunctuatorType(rawValue: punctuator) {
       self = .Punctuator(type)
     }
-    else
-    {
+    else {
       return nil
     }
   }
 
-  init(forIdentifier identifier: String)
-  {
-    if let kw = DeclarationKeywordType(string: identifier)
-    {
+  init(forIdentifier identifier: String) {
+    if let kw = DeclarationKeywordType(string: identifier) {
       self = .DeclarationKeyword(kw)
     }
-    else if let kw = StatementKeywordType(string: identifier)
-    {
+    else if let kw = StatementKeywordType(string: identifier) {
       self = .StatementKeyword(kw)
     }
-    else if let kw = KeywordType(string: identifier)
-    {
+    else if let kw = KeywordType(string: identifier) {
       self = .Keyword(kw)
     }
-    else 
-    {
-      self = .Identifier(false)      
+    else {
+      self = .Identifier(false)
     }
   }
 
-  init?(forHashKeyword hashKeyword: String)
-  {
-    if let kw = HashKeywordType(string: hashKeyword)
-    {
+  init?(forHashKeyword hashKeyword: String) {
+    if let kw = HashKeywordType(string: hashKeyword) {
       self = .HashKeyword(kw)
     }
-    else if let kw = HashConfigType(string: hashKeyword)
-    {
+    else if let kw = HashConfigType(string: hashKeyword) {
       self = .HashConfig(kw)
     }
-    else
-    {
+    else {
       return nil
     }
   }
+
 }
 
-extension TokenType : Equatable {}
+extension TokenType: Equatable {}
 
-public func ==(a: TokenType, b: TokenType) -> Bool
-{
-  switch (a, b)
-  {      
+public func == (a: TokenType, b: TokenType) -> Bool {
+  // tailor:off
+  switch (a, b) {
       case (.Unknown,                   .Unknown):                                return true
       case (.EOF,                       .EOF):                                    return true
       case (.DollarIdentifier,          .DollarIdentifier):                       return true
@@ -397,11 +378,13 @@ public func ==(a: TokenType, b: TokenType) -> Bool
       case (.Punctuator(let a),         .Punctuator(let b))         where a == b: return true
       default: return false
   }
+  // tailor:on
 }
 
-public struct Token
-{
+public struct Token {
+
   let type: TokenType
   let content: String
   let range: Range<String.UnicodeScalarView.Index>
+
 }

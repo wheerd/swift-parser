@@ -1,17 +1,12 @@
-private let zero : UnicodeScalar = "0"
-private let lowerA : UnicodeScalar = "a"
-private let upperA : UnicodeScalar = "A"
+private let zero: UnicodeScalar = "0"
+private let lowerA: UnicodeScalar = "a"
+private let upperA: UnicodeScalar = "A"
 
-extension UnicodeScalar
-{
-  var isIdentifierHead : Bool
-  {
-    get
-    {
-      if self.isASCII
-      {
-        switch self
-        {
+extension UnicodeScalar {
+  var isIdentifierHead: Bool {
+    get {
+      if self.isASCII {
+        switch self {
           case "a"..."z", "A"..."Z", "_":
             return true
           default:
@@ -19,8 +14,7 @@ extension UnicodeScalar
         }
       }
 
-      switch self
-      {
+      switch self {
         case "\u{00A8}", "\u{00AA}", "\u{00AD}", "\u{00AF}", "\u{00B2}"..."\u{00B5}", "\u{00B7}"..."\u{00BA}",
              "\u{00BC}"..."\u{00BE}", "\u{00C0}"..."\u{00D6}", "\u{00D8}"..."\u{00F6}", "\u{00F8}"..."\u{00FF}",
              "\u{0100}"..."\u{02FF}", "\u{0370}"..."\u{167F}", "\u{1681}"..."\u{180D}", "\u{180F}"..."\u{1DBF}",
@@ -42,17 +36,13 @@ extension UnicodeScalar
     }
   }
 
-  var isIdentifierBody : Bool
-  {
-    get
-    {
-      if self.isIdentifierHead
-      {
+  var isIdentifierBody: Bool {
+    get {
+      if self.isIdentifierHead {
         return true
       }
 
-      switch self
-      {
+      switch self {
         case "0"..."9",
              "\u{0300}", "\u{036F}", "\u{1DC0}"..."\u{1DFF}", "\u{20D0}"..."\u{20FF}", "\u{FE20}"..."\u{FE2F}":
           return true
@@ -62,14 +52,10 @@ extension UnicodeScalar
     }
   }
 
-  var isOperatorHead : Bool
-  {
-    get
-    {
-      if self.isASCII
-      {
-        switch self
-        {
+  var isOperatorHead: Bool {
+    get {
+      if self.isASCII {
+        switch self {
           case "/", "=", "-", "+", "!", "*", "%", "<",
                ">", "&", "|", "^", "~", "?", ".":
             return true
@@ -78,8 +64,7 @@ extension UnicodeScalar
         }
       }
 
-      switch self
-      {
+      switch self {
         case "\u{00A1}"..."\u{00A7}", "\u{00A9}", "\u{00AB}", "\u{00AC}",
              "\u{00AE}", "\u{00B0}"..."\u{00B1}", "\u{00B6}", "\u{00BB}",
              "\u{00BF}", "\u{00D7}", "\u{00F7}", "\u{2016}"..."\u{2017}",
@@ -95,17 +80,13 @@ extension UnicodeScalar
     }
   }
 
-  var isOperatorBody : Bool
-  {
-    get
-    {
-      if self.isOperatorHead
-      {
+  var isOperatorBody: Bool {
+    get {
+      if self.isOperatorHead {
         return true
       }
 
-      switch self
-      {
+      switch self {
         case "\u{0300}"..."\u{036F}",
              "\u{1DC0}"..."\u{1DFF}",
              "\u{20D0}"..."\u{20FF}",
@@ -119,12 +100,9 @@ extension UnicodeScalar
     }
   }
 
-  var isDigit : Bool
-  {
-    get
-    {
-      switch self
-      {
+  var isDigit: Bool {
+    get {
+      switch self {
         case "0"..."9":
           return true
         default:
@@ -132,13 +110,10 @@ extension UnicodeScalar
       }
     }
   }
-  
-  var isHexDigit : Bool
-  {
-    get
-    {
-      switch self
-      {
+
+  var isHexDigit: Bool {
+    get {
+      switch self {
         case "0"..."9", "a"..."f", "A"..."F":
           return true
         default:
@@ -146,21 +121,16 @@ extension UnicodeScalar
       }
     }
   }
-  
-  var decimalValue : UInt32?
-  {
-    get
-    {
+
+  var decimalValue: UInt32? {
+    get {
       return self.isDigit ? ((self.value - zero.value) as UInt32?) : nil
     }
   }
 
-  var hexValue : UInt32?
-  {
-    get
-    {
-      switch self
-      {
+  var hexValue: UInt32? {
+    get {
+      switch self {
         case "0"..."9":
           return self.value - zero.value
         case "a"..."f":
@@ -174,20 +144,16 @@ extension UnicodeScalar
   }
 }
 
-func * (str: String, times: Int) -> String
-{
+func * (str: String, times: Int) -> String {
     return (0..<times).reduce("") { $0.0 + str }
 }
 
-extension String
-{
-  var literalString : String
-  {
-    get
-    {
+extension String {
+
+  var literalString: String {
+    get {
       return "\"" + self.characters.map {
-        switch $0
-        {
+        switch $0 {
           case "\n":
             return "\\n"
           case "\r":
@@ -204,21 +170,21 @@ extension String
       }.joined(separator: "") + "\""
     }
   }
+
 }
 
-extension String.UnicodeScalarView
-{
-  func getCount(range: Range<String.UnicodeScalarView.Index>) -> Int
-  {
-    var count : Int = 0
+extension String.UnicodeScalarView {
+
+  func getCount(range: Range<String.UnicodeScalarView.Index>) -> Int {
+    var count: Int = 0
     var index = range.lowerBound
 
-    while index != range.upperBound
-    {
+    while index != range.upperBound {
       index = self.index(after: index)
       count += 1
     }
 
     return count
   }
+
 }
