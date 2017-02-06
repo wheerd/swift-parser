@@ -59,6 +59,7 @@ class Lexer: Sequence {
     self.parenthesisDepth = parenthesisDepth
   }
 
+  @discardableResult
   func diagnose(_ message: String, type: Diagnose.DiagnoseType, start: Index? = nil, end: Index? = nil) -> Diagnose {
     let start = start ?? self.index
     let end = end ?? start
@@ -634,7 +635,7 @@ class Lexer: Sequence {
     self.advance()
     let literalStart = self.index
 
-    if let char = self.currentChar where !numChars.contains(char) {
+    if let char = self.currentChar, !numChars.contains(char) {
         self.diagnose("expected a digit after integer literal prefix", type: .Error)
         self.advanceWhile { $0.isIdentifierBody }
 
@@ -657,7 +658,7 @@ class Lexer: Sequence {
     self.advance()
     let literalStart = self.index
 
-    if let char = self.currentChar where !char.isHexDigit {
+    if let char = self.currentChar, !char.isHexDigit {
         self.diagnose("expected a digit after integer literal prefix", type: .Error)
         self.advanceWhile { $0.isIdentifierBody }
 
@@ -689,7 +690,7 @@ class Lexer: Sequence {
       self.advance()
     }
 
-    if let char = self.currentChar where !char.isDigit {
+    if let char = self.currentChar, !char.isDigit {
         self.diagnose("expected a digit in floating point exponent", type: .Error)
 
         return makeToken(type: .Unknown, range: start..<self.index)
@@ -712,7 +713,7 @@ class Lexer: Sequence {
     var isFloat = false
     if currentChar == "." {
       isFloat = nextChar?.isDigit ?? false
-      if let lastType = self.lastToken?.type where lastType == TokenType.Punctuator(.Period) {
+      if let lastType = self.lastToken?.type, lastType == TokenType.Punctuator(.Period) {
         isFloat = false
       }
     }
@@ -738,7 +739,7 @@ class Lexer: Sequence {
         self.advance()
       }
 
-      if let char = self.currentChar where !char.isDigit {
+      if let char = self.currentChar, !char.isDigit {
           self.diagnose("expected a digit in floating point exponent", type: .Error)
 
           return makeToken(type: .Unknown, range: start..<self.index)
@@ -774,7 +775,12 @@ class Lexer: Sequence {
       throw Diagnose("\\u{...} escape sequence expects between 1 and 8 hex digits", type: .Error, at: self.index, source: self.source)
     }
 
-    return UnicodeScalar(hexValue)
+    if let value = UnicodeScalar(hexValue) {
+      return value
+    }
+    else {
+      throw Diagnose("Invalid \\u{...} escape sequence, not a valid unicode character", type: .Error, at: self.index, source: self.source)
+    }
   }
 
   func makeDoubleQuotedLiteral(singleQuoted: String) -> String {
@@ -804,7 +810,7 @@ class Lexer: Sequence {
     return replacement
   }
 
-  enum StringEnd: ErrorProtocol {
+  enum StringEnd: Error {
     case End
   }
 

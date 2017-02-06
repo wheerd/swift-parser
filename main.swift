@@ -1,10 +1,10 @@
 import Foundation
 
-func relativePath(_ path: String) -> String? {
-  return NSURL(fileURLWithPath: #file, isDirectory: false).URLByDeletingLastPathComponent?.URLByAppendingPathComponent(path)?.path
+func relativePath(_ path: String) -> String {
+  return URL(fileURLWithPath: #file, isDirectory: false).deletingLastPathComponent().appendingPathComponent(path).path
 }
 
-if let source = Source(path: relativePath("tests/test.swift")!) {
+if let source = Source(path: relativePath("tests/test.swift")) {
     var l = Lexer(source)
 
     for token in l.filter({ $0.type != .Whitespace }) { // tailor:disable

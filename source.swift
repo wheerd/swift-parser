@@ -19,7 +19,7 @@ class Source {
   }
 
   convenience init?(path: String) {
-    if let content = try? NSString(contentsOfFile: path, encoding: NSUTF8StringEncoding) {
+    if let content = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
       self.init(String(content), identifier: path)
     }
     else {

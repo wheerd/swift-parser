@@ -1,4 +1,4 @@
-class Diagnose: ErrorProtocol {
+class Diagnose: Error {
 
   typealias Index = String.UnicodeScalarView.Index
 
@@ -41,19 +41,23 @@ class Diagnose: ErrorProtocol {
     return self.source.getContext(index: self.range.lowerBound)
   }
 
+  @discardableResult
   func withReplaceFix(_ replacement: String, range: Range<Index>? = nil) -> Diagnose {
     self.fixIts.append(FixIt(range: range ?? self.range, replacement: replacement))
     return self
   }
 
+  @discardableResult
   func withInsertFix(_ insert: String, at: Index) -> Diagnose {
     return self.withReplaceFix(insert, range: at..<at)
   }
 
+  @discardableResult
   func withRemoveFix(_ range: Range<Index>? = nil) -> Diagnose {
     return self.withReplaceFix("", range: range ?? self.range)
   }
 
+  @discardableResult
   func withNote(_ message: String, range: Range<Index>, source: Source? = nil) -> Diagnose {
     self.related.append(Diagnose(message, type: .Note, range: range, source: source ?? self.source))
     return self
