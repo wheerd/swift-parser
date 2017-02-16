@@ -9,6 +9,17 @@ class Diagnose: Error {
   struct FixIt {
     let range: Range<Index>
     let replacement: String
+
+    func display(source: Source) {
+      let (lineRange, _, col) = source.getContext(index: self.range.lowerBound)
+      let range = self.range.clamped(to: lineRange)
+      let count = source.characters.getCount(range: range)
+      print(String(source.characters[lineRange]))
+      print(" " * (col - 1), terminator: "")
+      print("^" * max(count, 1))
+      print(" " * (col - 1), terminator: "")
+      print(replacement)
+    }
   }
 
   let source: Source
@@ -63,4 +74,22 @@ class Diagnose: Error {
     return self
   }
 
+  func display() {
+    let (lineRange, line, col) = getContext()
+    let range = self.range.clamped(to: lineRange)
+    let count = source.characters.getCount(range: range)
+    print("\(source.identifier):\(line):\(col) \(type): \(message)")
+    print(String(source.characters[lineRange]))
+    print(" " * (col - 1), terminator: "")
+    print("^" * max(count, 1))
+    if !fixIts.isEmpty {
+      print("Fix:")
+      for fixIt in fixIts {
+        fixIt.display(source: source)
+      }
+    }
+    for other in related {
+      other.display()
+    }
+  }
 }

@@ -7,7 +7,9 @@ class Lexer: Sequence {
   let characters: String.UnicodeScalarView
   let startIndex: Index
   let endIndex: Index
-  var lastToken: Token? = nil
+  var lastToken: Token?
+  var nextToken: Token!
+  let lexWhitespace: Bool
 
   private var parenthesisDepth: Int
   private var subLexer: Lexer? = nil
@@ -49,7 +51,7 @@ class Lexer: Sequence {
     self.init(source, parenthesisDepth: 0)
   }
 
-  init(_ source: Source, parenthesisDepth: Int, startIndex: Index? = nil, endIndex: Index? = nil, currentIndex: Index? = nil) {
+  init(_ source: Source, parenthesisDepth: Int, startIndex: Index? = nil, endIndex: Index? = nil, currentIndex: Index? = nil, lexWhitespace: Bool = false) {
     self.source = source
     self.characters = source.characters
     self.startIndex = startIndex ?? source.start
@@ -57,6 +59,10 @@ class Lexer: Sequence {
 
     self.index = currentIndex ?? startIndex ?? source.start
     self.parenthesisDepth = parenthesisDepth
+    self.lexWhitespace = lexWhitespace
+
+    self.lastToken = nil
+    self.nextToken = self.lexAndWrap()
   }
 
   @discardableResult
@@ -79,17 +85,42 @@ class Lexer: Sequence {
     self.index = self.startIndex
 
     return AnyIterator { [weak self] in
-      switch self!.lastToken?.type {
-        case .EOF?:
+      switch self!.nextToken.type {
+        case .EOF:
           return nil
         default:
-          self!.lastToken = self!.lexNextToken()
-          return self!.lastToken
+          return self!.lexNextToken()
       }
     }
   }
 
   func lexNextToken() -> Token {
+    lastToken = nextToken!
+    if lastToken!.type != .EOF {
+      nextToken = lexAndWrap()
+    }
+    return lastToken!
+  }
+
+  func peekNextToken() -> Token {
+    return self.nextToken!
+  }
+
+  private func lexAndWrap() -> Token {
+    var token = self.lex()
+    if !self.lexWhitespace {
+      let commentStart = token.range.lowerBound
+      var comment = ""
+      while token.type.isWhitespace {
+        comment += token.content
+        token = self.lex()
+      }
+      return Token(token: token, comment: comment, commentStart: commentStart)
+    }
+    return token
+  }
+
+  private func lex() -> Token {
     if let subLexer = self.subLexer {
       let oldIndex = subLexer.index
       let token = subLexer.lexNextToken()
@@ -494,6 +525,11 @@ class Lexer: Sequence {
         }
         return Token(type: .Punctuator(.InfixQuestionMark), content: "?", range: start..<self.index)
 
+      case "!":
+        if leftBound {
+          return Token(type: .Punctuator(.PostfixExclaimationMark), content: "!", range: start..<self.index)
+        }
+
       case "->":
         return Token(type: .Punctuator(.Arrow), content: "->", range: start..<self.index)
 
@@ -713,7 +749,7 @@ class Lexer: Sequence {
     var isFloat = false
     if currentChar == "." {
       isFloat = nextChar?.isDigit ?? false
-      if let lastType = self.lastToken?.type, lastType == TokenType.Punctuator(.Period) {
+      if self.nextToken.type == .Punctuator(.Period) {
         isFloat = false
       }
     }
@@ -753,7 +789,7 @@ class Lexer: Sequence {
     return Token(type: .FloatLiteral(.Decimal), content: content, range: start..<self.index)
   }
 
-  func lexUnicodeEscape() throws -> UnicodeScalar {
+  func lexUnicodeEscape(start: Index) throws -> UnicodeScalar {
     assert(self.currentChar == "{", "Invalid unicode escape")
     self.advance()
 
@@ -772,14 +808,14 @@ class Lexer: Sequence {
     self.advance()
 
     if numDigits < 1 || numDigits > 8 {
-      throw Diagnose("\\u{...} escape sequence expects between 1 and 8 hex digits", type: .Error, at: self.index, source: self.source)
+      throw Diagnose("\\u{...} escape sequence expects between 1 and 8 hex digits", type: .Error, range: start..<self.index, source: self.source)
     }
 
     if let value = UnicodeScalar(hexValue) {
       return value
     }
     else {
-      throw Diagnose("Invalid \\u{...} escape sequence, not a valid unicode character", type: .Error, at: self.index, source: self.source)
+      throw Diagnose("Invalid \\u{...} escape sequence, invalid unicode scalar", type: .Error, range: start..<self.index, source: self.source)
     }
   }
 
@@ -821,6 +857,7 @@ class Lexer: Sequence {
 
     switch self.currentChar! {
       case "\\":
+        let start = self.index
         self.advance()
         guard self.nextChar != nil else {
           throw Diagnose("invalid escape sequence in literal", type: .Error, at: self.index, source: self.source)
@@ -842,7 +879,7 @@ class Lexer: Sequence {
               throw Diagnose("expected hexadecimal code in braces after unicode escape", type: .Error, at: self.index, source: self.source)
             }
 
-            return try self.lexUnicodeEscape()
+            return try self.lexUnicodeEscape(start: start)
           default:
             throw Diagnose("invalid escape sequence in literal", type: .Error, at: self.index, source: self.source)
         }
@@ -958,6 +995,15 @@ class Lexer: Sequence {
 
       // Otherwise, keep scanning.
     }
+  }
+
+  func getIndex(after index: Index) -> Index {
+    return self.characters.index(after: index)
+  }
+
+  func resetIndex(to index: Index) {
+    self.index = index
+    self.nextToken = self.lexAndWrap()
   }
 
 }

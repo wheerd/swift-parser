@@ -1,7 +1,7 @@
 public enum PunctuatorType: String {
 
   case LeftParenthesis   = "("
-  case LRightParenthesis = ")"
+  case RightParenthesis  = ")"
   case LeftBrace         = "{"
   case RightBrace        = "}"
   case LeftSquare        = "["
@@ -159,6 +159,7 @@ public enum DeclarationKeywordType: String {
   case InOut
   case Let
   case Operator
+  case PrecedenceGroup
   case ProtocolKeyword
   case Struct
   case Subscript
@@ -193,6 +194,8 @@ public enum DeclarationKeywordType: String {
         self = .Let
       case "operator":
         self = .Operator
+      case "precedencegroup":
+        self = .PrecedenceGroup
       case "protocol":
         self = .ProtocolKeyword
       case "struct":
@@ -349,6 +352,13 @@ public enum TokenType {
     }
   }
 
+  var isWhitespace: Bool {
+    switch (self) {
+        case .Whitespace, .Comment(_): return true
+        default: return false
+    }
+
+  }
 }
 
 extension TokenType: Equatable {}
@@ -382,9 +392,27 @@ public func == (a: TokenType, b: TokenType) -> Bool {
 }
 
 public struct Token {
+  typealias Index = String.UnicodeScalarView.Index
 
   let type: TokenType
   let content: String
-  let range: Range<String.UnicodeScalarView.Index>
+  let range: Range<Index>
+  let comment: String?
+  let commentStart: Index?
 
+  init(type: TokenType, content: String, range: Range<Index>) {
+    self.type = type
+    self.content = content
+    self.range = range
+    self.comment = nil
+    self.commentStart = nil
+  }
+
+  init(token: Token, comment: String, commentStart: Index) {
+    self.type = token.type
+    self.content = token.content
+    self.range = token.range
+    self.comment = comment
+    self.commentStart = commentStart
+  }
 }
