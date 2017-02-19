@@ -175,8 +175,10 @@ class Parser {
         while attribute_name_token.type == .Identifier(false) {
             let name = attribute_name_token.content
             let colon = lexer.lexNextToken()
-            guard colon.type == .Punctuator(.Colon) else {
-                throw self.diagnose("Expected colon after attribute name in precedence group")
+            if colon.type != .Punctuator(.Colon) {
+                self.diagnose("Expected colon after attribute name in precedence group")
+                lexer.resetToBeginning(of: colon)
+                valid = false
             }
             switch name {
                 case "associativity":
@@ -227,7 +229,7 @@ class Parser {
                         lowerThan = groups.map { Identifier($0) }
                     }
                 default:
-                    let error = self.diagnose("'\(name)' is not a valid precedence group attribute")
+                    let error = self.diagnose("'\(name)' is not a valid precedence group attribute", at: attribute_name_token)
                     abortBlock()
                     throw error
             }
@@ -270,6 +272,17 @@ class Parser {
       message,
       type: type,
       at: lexer.lastToken!.range.start
+    )
+    diagnoses.append(diag)
+    return diag
+  }
+
+  @discardableResult
+  func diagnose(_ message: String, after token: Token, type: Diagnose.DiagnoseType = .Error) -> Diagnose {
+    let diag = Diagnose(
+      message,
+      type: type,
+      range: SourceRange(source: token.range.source, index: token.range.end.index)
     )
     diagnoses.append(diag)
     return diag

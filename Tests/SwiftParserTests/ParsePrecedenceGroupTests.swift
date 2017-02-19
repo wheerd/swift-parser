@@ -16,6 +16,16 @@ class ParsePrecedenceGroupTests: ParserTestCase {
                 afterPosition: "fubar"
             ),
             ParserExample(
+                "syntax error 2",
+                parser: Parser.parsePrecedenceGroup,
+                input:
+                    "precedencegroup { fubar }",
+                error:
+                    "Error: Expected identifier after 'precedencegroup'\n" +
+                    "precedencegroup { fubar }\n" +
+                    "                ^"
+            ),
+            ParserExample(
                 "associativity error",
                 parser: Parser.parsePrecedenceGroup,
                 input:
@@ -33,6 +43,20 @@ class ParsePrecedenceGroupTests: ParserTestCase {
                 validator: checkResult(associativity: .Left)
             ),
             ParserExample(
+                "associativity right",
+                parser: Parser.parsePrecedenceGroup,
+                input:
+                    "precedencegroup test { associativity: right }",
+                validator: checkResult(associativity: .Right)
+            ),
+            ParserExample(
+                "associativity none",
+                parser: Parser.parsePrecedenceGroup,
+                input:
+                    "precedencegroup test { associativity: none }",
+                validator: checkResult(associativity: Associativity.None)
+            ),
+            ParserExample(
                 "assignment error",
                 parser: Parser.parsePrecedenceGroup,
                 input:
@@ -43,18 +67,32 @@ class ParsePrecedenceGroupTests: ParserTestCase {
                     "                                   ^"
             ),
             ParserExample(
-                "associativity true",
+                "assignment true",
                 parser: Parser.parsePrecedenceGroup,
                 input:
                     "precedencegroup test { assignment: true }",
                 validator: checkResult(assignment: true)
             ),
             ParserExample(
-                "associativity false",
+                "assignment false",
                 parser: Parser.parsePrecedenceGroup,
                 input:
                     "precedencegroup test { assignment: false }",
                 validator: checkResult(assignment: false)
+            ),
+            ParserExample(
+                "higherThan error",
+                parser: Parser.parsePrecedenceGroup,
+                input:
+                    "precedencegroup test { higherThan: other other2 }",
+                error:
+                    "Error: Expected colon after attribute name in precedence group\n" +
+                    "precedencegroup test { higherThan: other other2 }\n" +
+                    "                                                ^\n" +
+                    "\n" +
+                    "Error: 'other2' is not a valid precedence group attribute\n" +
+                    "precedencegroup test { higherThan: other other2 }\n" +
+                    "                                         ^^^^^^"
             ),
             ParserExample(
                 "higherThan single",
@@ -62,6 +100,41 @@ class ParsePrecedenceGroupTests: ParserTestCase {
                 input:
                     "precedencegroup test { higherThan: other }",
                 validator: checkResult(higherThan: ["other"])
+            ),
+            ParserExample(
+                "higherThan multiple",
+                parser: Parser.parsePrecedenceGroup,
+                input:
+                    "precedencegroup test { higherThan: other, other2 }",
+                validator: checkResult(higherThan: ["other", "other2"])
+            ),
+            ParserExample(
+                "lowerThan error",
+                parser: Parser.parsePrecedenceGroup,
+                input:
+                    "precedencegroup test { lowerThan: other other2 }",
+                error:
+                    "Error: Expected colon after attribute name in precedence group\n" +
+                    "precedencegroup test { lowerThan: other other2 }\n" +
+                    "                                               ^\n" +
+                    "\n" +
+                    "Error: 'other2' is not a valid precedence group attribute\n" +
+                    "precedencegroup test { lowerThan: other other2 }\n" +
+                    "                                        ^^^^^^"
+            ),
+            ParserExample(
+                "lowerThan single",
+                parser: Parser.parsePrecedenceGroup,
+                input:
+                    "precedencegroup test { lowerThan: other }",
+                validator: checkResult(lowerThan: ["other"])
+            ),
+            ParserExample(
+                "lowerThan multiple",
+                parser: Parser.parsePrecedenceGroup,
+                input:
+                    "precedencegroup test { lowerThan: other, other2 }",
+                validator: checkResult(lowerThan: ["other", "other2"])
             ),
         ]
     }
