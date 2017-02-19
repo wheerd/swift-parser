@@ -153,11 +153,20 @@ class Parser {
             consumeIf(type: .Punctuator(.RightBrace))
             throw error
         }
+
+        var valid = true
         let name = ident_token.content
         var higherThan: [Identifier]? = nil
         var lowerThan: [Identifier]? = nil
         var associativity: Associativity? = nil
         var assignment: Bool? = nil
+
+        func abortBlock() {
+            valid = false
+            skipWhile { $0.type != .Punctuator(.RightBrace) }
+            consumeIf(type: .Punctuator(.RightBrace))
+        }
+
         let open_brace = lexer.lexNextToken()
         guard open_brace.type == .Punctuator(.LeftBrace) else {
             throw self.diagnose("Expected '{' after name of precedence group")
@@ -173,7 +182,9 @@ class Parser {
                 case "associativity":
                     let value = lexer.lexNextToken()
                     guard case .Identifier(_) = value.type else {
-                        throw self.diagnose("Expected 'none', 'left', or 'right' after 'associativity'")
+                        let error = self.diagnose("Expected 'none', 'left', or 'right' after 'associativity'")
+                        abortBlock()
+                        throw error
                     }
                     switch value.content {
                         case "left":
@@ -183,7 +194,9 @@ class Parser {
                         case "none":
                             associativity = Associativity.None
                         default:
-                            throw self.diagnose("Expected 'none', 'left', or 'right' after 'associativity'")
+                            let error = self.diagnose("Expected 'none', 'left', or 'right' after 'associativity'")
+                            abortBlock()
+                            throw error
                     }
                 case "assignment":
                     let value = lexer.lexNextToken()
@@ -193,14 +206,18 @@ class Parser {
                         case .Keyword(.False):
                             assignment = false
                         default:
-                            throw self.diagnose("Expected 'true' or 'false' after 'assignment'")
+                            let error = self.diagnose("Expected 'true' or 'false' after 'assignment'")
+                            abortBlock()
+                            throw error
                     }
                 case "higherThan", "lowerThan":
                     var groups = [String]()
                     repeat {
                         let group = lexer.lexNextToken()
                         guard case .Identifier(_) = group.type else {
-                            throw self.diagnose("Expected name of related precedence group after '\(name)'")
+                            let error = self.diagnose("Expected name of related precedence group after '\(name)'")
+                            abortBlock()
+                            throw error
                         }
                         groups.append(group.content)
                     } while (consumeIf(type: .Punctuator(.Comma)))
@@ -210,7 +227,9 @@ class Parser {
                         lowerThan = groups.map { Identifier($0) }
                     }
                 default:
-                    throw self.diagnose("'\(name)' is not a valid precedence group attribute")
+                    let error = self.diagnose("'\(name)' is not a valid precedence group attribute")
+                    abortBlock()
+                    throw error
             }
             attribute_name_token = lexer.lexNextToken()
         }

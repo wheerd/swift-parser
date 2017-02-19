@@ -9,11 +9,14 @@ class Lexer: Sequence {
   let endIndex: Index
   var lastToken: Token?
   var nextToken: Token!
-  let lexWhitespace: Bool
+  let lexComments: Bool
 
   private var parenthesisDepth: Int
   private var subLexer: Lexer? = nil
   private var interpolatedStringQuoteType: UnicodeScalar? = nil
+
+  private var prefixStart: Source.Index
+  private var atStartOfLine = true
 
   var prevChar: UnicodeScalar? {
     get {
@@ -51,18 +54,19 @@ class Lexer: Sequence {
     self.init(source, parenthesisDepth: 0)
   }
 
-  init(_ source: Source, parenthesisDepth: Int, startIndex: Index? = nil, endIndex: Index? = nil, currentIndex: Index? = nil, lexWhitespace: Bool = false) {
+  init(_ source: Source, parenthesisDepth: Int, startIndex: Index? = nil, endIndex: Index? = nil, currentIndex: Index? = nil, lexComments: Bool = false) {
     self.source = source
     self.characters = source.characters
     self.startIndex = startIndex ?? source.start
+    self.prefixStart = self.startIndex
     self.endIndex = endIndex ?? source.end
 
     self.index = currentIndex ?? startIndex ?? source.start
     self.parenthesisDepth = parenthesisDepth
-    self.lexWhitespace = lexWhitespace
+    self.lexComments = lexComments
 
     self.lastToken = nil
-    self.nextToken = self.lexAndWrap()
+    self.nextToken = self.lex()
   }
 
   @discardableResult
@@ -96,27 +100,13 @@ class Lexer: Sequence {
   func lexNextToken() -> Token {
     lastToken = nextToken!
     if lastToken!.type != .EOF {
-      nextToken = lexAndWrap()
+      nextToken = lex()
     }
     return lastToken!
   }
 
   func peekNextToken() -> Token {
     return self.nextToken!
-  }
-
-  private func lexAndWrap() -> Token {
-    var token = self.lex()
-    if !self.lexWhitespace {
-      let commentStart = token.range.range.lowerBound
-      var comment = ""
-      while token.type.isWhitespace {
-        comment += token.content
-        token = self.lex()
-      }
-      return Token(token: token, commentStart: SourceLocation(source: source, index: commentStart))
-    }
-    return token
   }
 
   private func lex() -> Token {
@@ -146,6 +136,9 @@ class Lexer: Sequence {
       return token
     }
 
+    prefixStart = index
+    atStartOfLine = index == startIndex
+
     while let char = self.currentChar {
       switch char {
         case "0":
@@ -166,25 +159,30 @@ class Lexer: Sequence {
           fallthrough
         case "[", "]", "{", "}", ":", ",", ";":
           return makeTokenAndAdvance(type: TokenType(forPunctuator: String(char))!)
-        case "\r":
-          return lexNewline(isCRLF: self.nextChar == "\n")
-        case "\n":
-          return lexNewline()
+        case "\n", "\r":
+          atStartOfLine = true
+          fallthrough
         case "\t", "\u{B}", "\u{C}", " ":
-          return lexAllMatching(as: .Whitespace) {
-            switch $0 {
-              case "\t", "\u{B}", "\u{C}", " ":
-                return true
-              default:
-                return false
-            }
-          }
+          self.advance()
+          continue
         case "/":
           switch self.nextChar {
             case "/"?:
-              return lexSinglelineComment()
+              let comment = lexSinglelineComment()
+              if lexComments {
+                return comment
+              } else {
+                prefixStart = comment.prefixStart.index
+                continue
+              }
             case "*"?:
-              return lexMultilineComment()
+              let comment = lexMultilineComment()
+              if lexComments {
+                return comment
+              } else {
+                prefixStart = comment.prefixStart.index
+                continue
+              }
             default:
               return self.lexOperator()
           }
@@ -357,7 +355,7 @@ class Lexer: Sequence {
     let content = String(self.characters[start..<self.index])
     let type = TokenType(forIdentifier: content)
 
-    return makeToken(type: type, range: start..<self.index)
+    return makeToken(type: type, range: start..<self.index, value: content)
   }
 
   func lexDollarIdentifier() -> Token {
@@ -393,7 +391,7 @@ class Lexer: Sequence {
     }
 
     let content = String(self.characters[nameStart..<self.index])
-    return makeToken(type: .DollarIdentifier, range: start..<self.index)
+    return makeToken(type: .DollarIdentifier, range: start..<self.index, value: content)
   }
 
   func lexEscapedIdentifier() -> Token {
@@ -420,7 +418,10 @@ class Lexer: Sequence {
 
         return Token(
           type: .Identifier(true),
-          range: SourceRange(source: source, range: start..<self.index)
+          range: SourceRange(source: source, range: start..<self.index),
+          prefixStart: prefixStart,
+          atStartOfLine: atStartOfLine,
+          value: source.substring(range: contentStart..<contentEnd)
         )
       }
     }
@@ -581,14 +582,13 @@ class Lexer: Sequence {
     return self.makeTokenAndAdvance(type: .Punctuator(.Hash))
   }
 
-  func lexNewline(isCRLF: Bool = false) -> Token {
-    return makeTokenAndAdvance(type: .Newline, numberOfChars: isCRLF ? 2 : 1)
-  }
-
-  func makeToken(type: TokenType, range: Range<Index>) -> Token {
+  func makeToken(type: TokenType, range: Range<Index>, value: String? = nil) -> Token {
     return Token(
       type: type,
-      range: SourceRange(source: source, range: range)
+      range: SourceRange(source: source, range: range),
+      prefixStart: prefixStart,
+      atStartOfLine: atStartOfLine,
+      value: value
     )
   }
 
@@ -679,7 +679,7 @@ class Lexer: Sequence {
 
     let content = self.characters[literalStart..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-    return makeToken(type: .IntegerLiteral(type), range: start..<self.index)
+    return makeToken(type: .IntegerLiteral(type), range: start..<self.index, value: content)
   }
 
   func lexHexNumberLiteral() -> Token {
@@ -703,7 +703,7 @@ class Lexer: Sequence {
     if (currentChar != "." || !(nextChar?.isHexDigit ?? false)) && currentChar != "p" && currentChar != "P" {
       let content = self.characters[literalStart..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-      return makeToken(type: .IntegerLiteral(.Hexadecimal), range: start..<self.index)
+      return makeToken(type: .IntegerLiteral(.Hexadecimal), range: start..<self.index, value: content)
     }
 
     if currentChar == "." {
@@ -733,7 +733,7 @@ class Lexer: Sequence {
 
     let content = self.characters[literalStart..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-    return makeToken(type: .FloatLiteral(.Hexadecimal), range: start..<self.index)
+    return makeToken(type: .FloatLiteral(.Hexadecimal), range: start..<self.index, value: content)
   }
 
   func lexDecimalNumberLiteral() -> Token {
@@ -757,7 +757,7 @@ class Lexer: Sequence {
     if !isFloat {
       let content = self.characters[start..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-      return makeToken(type: .IntegerLiteral(.Decimal), range: start..<self.index)
+      return makeToken(type: .IntegerLiteral(.Decimal), range: start..<self.index, value: content)
     }
 
     if currentChar == "." {
@@ -783,7 +783,7 @@ class Lexer: Sequence {
 
     let content = self.characters[start..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-    return makeToken(type: .FloatLiteral(.Decimal), range: start..<self.index)
+    return makeToken(type: .FloatLiteral(.Decimal), range: start..<self.index, value: content)
   }
 
   func lexUnicodeEscape(start: Index) throws -> UnicodeScalar {
@@ -949,7 +949,7 @@ class Lexer: Sequence {
     }
 
     let type: TokenType = wasErroneous ? .Unknown : .StringLiteral(interpolated ? .InterpolatedEnd : .Static)
-    return makeToken(type: type, range: start..<self.index)
+    return makeToken(type: type, range: start..<self.index, value: content)
   }
 
   func findEndOfCurlyQuoteStringLiteral() -> Index? {
@@ -1004,7 +1004,7 @@ class Lexer: Sequence {
 
   func resetIndex(to index: Index) {
     self.index = index
-    self.nextToken = self.lexAndWrap()
+    self.nextToken = self.lex()
   }
 
 }

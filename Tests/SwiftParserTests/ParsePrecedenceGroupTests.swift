@@ -5,6 +5,17 @@ class ParsePrecedenceGroupTests: ParserTestCase {
     override class func examples() -> [RunnableExample] {
         return [
             ParserExample(
+                "syntax error",
+                parser: Parser.parsePrecedenceGroup,
+                input:
+                    "precedencegroup [ fubar ]",
+                error:
+                    "Error: Expected identifier after 'precedencegroup'\n" +
+                    "precedencegroup [ fubar ]\n" +
+                    "                ^",
+                afterPosition: "fubar"
+            ),
+            ParserExample(
                 "associativity error",
                 parser: Parser.parsePrecedenceGroup,
                 input:

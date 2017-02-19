@@ -391,35 +391,41 @@ public func == (a: TokenType, b: TokenType) -> Bool {
   // tailor:on
 }
 
-public struct Token {
-  typealias Index = String.UnicodeScalarView.Index
-
+public struct Token: CustomStringConvertible, CustomDebugStringConvertible {
   let type: TokenType
   let range: SourceRange
-  let commentStart: SourceLocation?
+  let prefixStart: SourceLocation
+  let atStartOfLine: Bool
+  let value: String?
 
-  var content: String {
+  public var content: String {
     return range.content
   }
 
-  var comment: String? {
-    if let start = commentStart {
-      return range.source.substring(range: start.index..<range.range.lowerBound)
-    }
-    return nil
+  public var prefix: String {
+    return range.source.substring(range: prefixStart.index..<range.range.lowerBound)
   }
 
-  init(type: TokenType, range: SourceRange) {
+  public var description: String {
+    return range.source.substring(range: prefixStart.index..<range.range.upperBound)
+  }
+
+  public var debugDescription: String {
+    if let value = self.value {
+      return "Token(type: \(type), range: \(range), value: \(String(reflecting: value)))"
+    }
+    return "Token(type: \(type), range: \(range))"
+  }
+
+  init(type: TokenType, range: SourceRange, prefixStart: SourceLocation? = nil, atStartOfLine: Bool = false, value: String? = nil) {
     self.type = type
     self.range = range
-    self.commentStart = nil
+    self.prefixStart = prefixStart ?? range.start
+    self.atStartOfLine = atStartOfLine
+    self.value = value
   }
 
-  init(token: Token, commentStart: SourceLocation) {
-    assert(commentStart.source === token.range.source)
-    assert(commentStart.index <= token.range.range.lowerBound)
-    self.type = token.type
-    self.range = token.range
-    self.commentStart = commentStart
+  init(type: TokenType, range: SourceRange, prefixStart: Source.Index, atStartOfLine: Bool = false, value: String? = nil) {
+    self.init(type: type, range: range, prefixStart: SourceLocation(source: range.source, index: prefixStart), atStartOfLine: atStartOfLine, value: value)
   }
 }
