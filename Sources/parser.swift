@@ -6,6 +6,15 @@ class Parser {
         self.lexer = Lexer(source)
     }
 
+    func parse() -> Any? {
+        switch lexer.peekNextToken().type {
+            case .DeclarationKeyword(.PrecedenceGroup):
+                return try? parsePrecedenceGroup() as Any
+            default:
+                return nil
+        }
+    }
+
     func parseType() -> Type {
         var type: Type = .Unknown
         let token = self.lexer.lexNextToken()
@@ -58,7 +67,7 @@ class Parser {
                             let dot = self.lexer.lexNextToken()
                             ident_token = self.lexer.lexNextToken()
                             if ident_token.type == .Identifier(false) && (ident_token.content == "Type" || ident_token.content == "Protocol") {
-                                self.lexer.resetIndex(to: dot.range.lowerBound)
+                                self.lexer.resetToBeginning(of: dot)
                                 break identifier_loop
                             }
                         case .BinaryOperator("<"):
@@ -70,7 +79,7 @@ class Parser {
                             let after = self.lexer.lexNextToken()
                             if case let .PostfixOperator(op) = after.type, op.hasPrefix(">") {
                                 if op != ">" {
-                                    let next_index = self.lexer.getIndex(after: after.range.lowerBound)
+                                    let next_index = self.lexer.getIndex(after: after.range.range.lowerBound)
                                     self.lexer.resetIndex(to: next_index)
                                 }
                             } else {
@@ -114,7 +123,7 @@ class Parser {
                             case "Protocol":
                                 type = .MetaProtocol(type)
                             default:
-                                self.lexer.resetIndex(to: nextToken.range.lowerBound)
+                                self.lexer.resetToBeginning(of: nextToken)
                                 break postfix_loop
                         }
                     }
@@ -238,12 +247,10 @@ class Parser {
 
   @discardableResult
   func diagnose(_ message: String, type: Diagnose.DiagnoseType = .Error) -> Diagnose {
-    let index = lexer.lastToken!.range.lowerBound
     let diag = Diagnose(
       message,
       type: type,
-      range: index..<index,
-      source: lexer.source
+      at: lexer.lastToken!.range.start
     )
     diagnoses.append(diag)
     return diag
@@ -254,8 +261,7 @@ class Parser {
     let diag = Diagnose(
       message,
       type: type,
-      range: token.range,
-      source: lexer.source
+      range: token.range
     )
     diagnoses.append(diag)
     return diag

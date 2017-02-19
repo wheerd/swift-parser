@@ -13,7 +13,7 @@ class Lexer: Sequence {
 
   private var parenthesisDepth: Int
   private var subLexer: Lexer? = nil
-  private var interpoledStringQuoteType: UnicodeScalar? = nil
+  private var interpolatedStringQuoteType: UnicodeScalar? = nil
 
   var prevChar: UnicodeScalar? {
     get {
@@ -73,8 +73,7 @@ class Lexer: Sequence {
     let diag = Diagnose(
       message,
       type: type,
-      range: start..<end,
-      source: source
+      range: SourceRange(source: source, range: start..<end)
     )
     diagnoses.append(diag)
 
@@ -109,13 +108,13 @@ class Lexer: Sequence {
   private func lexAndWrap() -> Token {
     var token = self.lex()
     if !self.lexWhitespace {
-      let commentStart = token.range.lowerBound
+      let commentStart = token.range.range.lowerBound
       var comment = ""
       while token.type.isWhitespace {
         comment += token.content
         token = self.lex()
       }
-      return Token(token: token, comment: comment, commentStart: commentStart)
+      return Token(token: token, commentStart: SourceLocation(source: source, index: commentStart))
     }
     return token
   }
@@ -128,17 +127,17 @@ class Lexer: Sequence {
       if token.type == .Newline || token.type == .EOF {
         self.index = subLexer.index
         self.subLexer = nil
-        self.interpoledStringQuoteType = nil
+        self.interpolatedStringQuoteType = nil
 
         diagnose("unterminated string literal", type: .Error, start: oldIndex)
         return token
       }
 
-      if let quoteType = self.interpoledStringQuoteType {
+      if let quoteType = self.interpolatedStringQuoteType {
         if subLexer.parenthesisDepth == 0 {
           self.index = oldIndex
           self.subLexer = nil
-          self.interpoledStringQuoteType = nil
+          self.interpolatedStringQuoteType = nil
 
           return self.lexStringLiteral(quoteType: quoteType, interpolated: true)
         }
@@ -358,7 +357,7 @@ class Lexer: Sequence {
     let content = String(self.characters[start..<self.index])
     let type = TokenType(forIdentifier: content)
 
-    return Token(type: type, content: content, range: start..<self.index)
+    return makeToken(type: type, range: start..<self.index)
   }
 
   func lexDollarIdentifier() -> Token {
@@ -394,7 +393,7 @@ class Lexer: Sequence {
     }
 
     let content = String(self.characters[nameStart..<self.index])
-    return Token(type: .DollarIdentifier, content: content, range: start..<self.index)
+    return makeToken(type: .DollarIdentifier, range: start..<self.index)
   }
 
   func lexEscapedIdentifier() -> Token {
@@ -421,8 +420,7 @@ class Lexer: Sequence {
 
         return Token(
           type: .Identifier(true),
-          content: String(self.characters[contentStart..<contentEnd]),
-          range: start..<self.index
+          range: SourceRange(source: source, range: start..<self.index)
         )
       }
     }
@@ -467,7 +465,7 @@ class Lexer: Sequence {
 
     if error != nil {
         self.diagnose(error!, type: .Error, start: start, end: self.index)
-        return Token(type: .Unknown, content: content, range: start..<self.index)
+        return makeToken(type: .Unknown, range: start..<self.index)
     }
 
     let leftBound = self.isLeftBound(startIndex: start)
@@ -484,20 +482,20 @@ class Lexer: Sequence {
             d.withInsertFix(" ", at: self.index)
           }
         }
-        return Token(type: .Punctuator(.EqualSign), content: "=", range: start..<self.index)
+        return makeToken(type: .Punctuator(.EqualSign), range: start..<self.index)
 
       case "&":
         if rightBound && !leftBound {
-          return Token(type: .Punctuator(.PrefixAmpersand), content: "&", range: start..<self.index)
+          return makeToken(type: .Punctuator(.PrefixAmpersand), range: start..<self.index)
         }
 
       case ".":
         if rightBound == leftBound {
-          return Token(type: .Punctuator(.Period), content: ".", range: start..<self.index)
+          return makeToken(type: .Punctuator(.Period), range: start..<self.index)
         }
 
         if rightBound {
-          return Token(type: .Punctuator(.PrefixPeriod), content: ".", range: start..<self.index)
+          return makeToken(type: .Punctuator(.PrefixPeriod), range: start..<self.index)
         }
 
         let afterWhitespaceIndex = self.skipWhile {
@@ -512,30 +510,30 @@ class Lexer: Sequence {
         if let char = self.source.character(at: afterWhitespaceIndex) {
           if isRightBound(endIndex: afterWhitespaceIndex, isLeftBound: leftBound) && char != "/" {
             self.diagnose("extraneous whitespace after '.' is not permitted", type: .Error, start: self.index, end: afterWhitespaceIndex).withRemoveFix()
-            return Token(type: .Punctuator(.Period), content: ".", range: start..<self.index)
+            return makeToken(type: .Punctuator(.Period), range: start..<self.index)
           }
         }
 
         self.diagnose("expected member name following '.'", type: .Error, start: self.index)
-        return Token(type: .Unknown, content: content, range: self.index..<self.index)
+        return makeToken(type: .Unknown, range: self.index..<self.index)
 
       case "?":
         if leftBound {
-          return Token(type: .Punctuator(.PostfixQuestionMark), content: "?", range: start..<self.index)
+          return makeToken(type: .Punctuator(.PostfixQuestionMark), range: start..<self.index)
         }
-        return Token(type: .Punctuator(.InfixQuestionMark), content: "?", range: start..<self.index)
+        return makeToken(type: .Punctuator(.InfixQuestionMark), range: start..<self.index)
 
       case "!":
         if leftBound {
-          return Token(type: .Punctuator(.PostfixExclaimationMark), content: "!", range: start..<self.index)
+          return makeToken(type: .Punctuator(.PostfixExclaimationMark), range: start..<self.index)
         }
 
       case "->":
-        return Token(type: .Punctuator(.Arrow), content: "->", range: start..<self.index)
+        return makeToken(type: .Punctuator(.Arrow), range: start..<self.index)
 
       case "*/":
         self.diagnose("unexpected end of block comment", type: .Error, start: start, end: self.index)
-        return Token(type: .Unknown, content: content, range: start..<self.index)
+        return makeToken(type: .Unknown, range: start..<self.index)
 
       default:
         break
@@ -546,7 +544,7 @@ class Lexer: Sequence {
       ? .BinaryOperator(content) : leftBound
         ? .PostfixOperator(content) : .PrefixOperator(content)
 
-    return Token(type: type, content: content, range: start..<self.index)
+    return makeToken(type: type, range: start..<self.index)
   }
 
   func lexHash() -> Token {
@@ -574,7 +572,7 @@ class Lexer: Sequence {
     if self.index > nameStart {
       let name = String(self.characters[nameStart..<self.index])
       if let type = TokenType(forHashKeyword: name) {
-        return Token(type: type, content: name, range: start..<self.index)
+        return makeToken(type: type, range: start..<self.index)
       }
     }
 
@@ -590,8 +588,7 @@ class Lexer: Sequence {
   func makeToken(type: TokenType, range: Range<Index>) -> Token {
     return Token(
       type: type,
-      content: String(self.characters[range]),
-      range: range
+      range: SourceRange(source: source, range: range)
     )
   }
 
@@ -608,7 +605,7 @@ class Lexer: Sequence {
 
   func makeTokenAndAdvance(type: TokenType, numberOfChars: Int = 1) -> Token {
     let token = makeToken(type: type, numberOfChars: numberOfChars)
-    self.index = token.range.upperBound
+    self.index = token.range.range.upperBound
 
     return token
   }
@@ -682,7 +679,7 @@ class Lexer: Sequence {
 
     let content = self.characters[literalStart..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-    return Token(type: .IntegerLiteral(type), content: content, range: start..<self.index)
+    return makeToken(type: .IntegerLiteral(type), range: start..<self.index)
   }
 
   func lexHexNumberLiteral() -> Token {
@@ -706,7 +703,7 @@ class Lexer: Sequence {
     if (currentChar != "." || !(nextChar?.isHexDigit ?? false)) && currentChar != "p" && currentChar != "P" {
       let content = self.characters[literalStart..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-      return Token(type: .IntegerLiteral(.Hexadecimal), content: content, range: start..<self.index)
+      return makeToken(type: .IntegerLiteral(.Hexadecimal), range: start..<self.index)
     }
 
     if currentChar == "." {
@@ -736,7 +733,7 @@ class Lexer: Sequence {
 
     let content = self.characters[literalStart..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-    return Token(type: .FloatLiteral(.Hexadecimal), content: content, range: start..<self.index)
+    return makeToken(type: .FloatLiteral(.Hexadecimal), range: start..<self.index)
   }
 
   func lexDecimalNumberLiteral() -> Token {
@@ -760,7 +757,7 @@ class Lexer: Sequence {
     if !isFloat {
       let content = self.characters[start..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-      return Token(type: .IntegerLiteral(.Decimal), content: content, range: start..<self.index)
+      return makeToken(type: .IntegerLiteral(.Decimal), range: start..<self.index)
     }
 
     if currentChar == "." {
@@ -786,7 +783,7 @@ class Lexer: Sequence {
 
     let content = self.characters[start..<self.index].filter { $0 != "_" }.map { String($0) }.joined(separator: "")
 
-    return Token(type: .FloatLiteral(.Decimal), content: content, range: start..<self.index)
+    return makeToken(type: .FloatLiteral(.Decimal), range: start..<self.index)
   }
 
   func lexUnicodeEscape(start: Index) throws -> UnicodeScalar {
@@ -803,19 +800,19 @@ class Lexer: Sequence {
     }
 
     if self.currentChar != "}" {
-      throw Diagnose("expected '}' in \\u{...} escape sequence", type: .Error, at: self.index, source: self.source)
+      throw Diagnose("expected '}' in \\u{...} escape sequence", type: .Error, at: SourceLocation(source: self.source, index: self.index))
     }
     self.advance()
 
     if numDigits < 1 || numDigits > 8 {
-      throw Diagnose("\\u{...} escape sequence expects between 1 and 8 hex digits", type: .Error, range: start..<self.index, source: self.source)
+      throw Diagnose("\\u{...} escape sequence expects between 1 and 8 hex digits", type: .Error, range: SourceRange(source: self.source, range: start..<self.index))
     }
 
     if let value = UnicodeScalar(hexValue) {
       return value
     }
     else {
-      throw Diagnose("Invalid \\u{...} escape sequence, invalid unicode scalar", type: .Error, range: start..<self.index, source: self.source)
+      throw Diagnose("Invalid \\u{...} escape sequence, invalid unicode scalar", type: .Error, range: SourceRange(source: self.source, range: start..<self.index))
     }
   }
 
@@ -860,7 +857,7 @@ class Lexer: Sequence {
         let start = self.index
         self.advance()
         guard self.nextChar != nil else {
-          throw Diagnose("invalid escape sequence in literal", type: .Error, at: self.index, source: self.source)
+          throw Diagnose("invalid escape sequence in literal", type: .Error, at: SourceLocation(source: self.source, index: self.index))
         }
         switch self.currentChar! {
           case "\\", "\"", "'":
@@ -876,12 +873,12 @@ class Lexer: Sequence {
           case "u":
             self.advance()
             if self.currentChar != "{" {
-              throw Diagnose("expected hexadecimal code in braces after unicode escape", type: .Error, at: self.index, source: self.source)
+              throw Diagnose("expected hexadecimal code in braces after unicode escape", type: .Error, at: SourceLocation(source: self.source, index: self.index))
             }
 
             return try self.lexUnicodeEscape(start: start)
           default:
-            throw Diagnose("invalid escape sequence in literal", type: .Error, at: self.index, source: self.source)
+            throw Diagnose("invalid escape sequence in literal", type: .Error, at: SourceLocation(source: self.source, index: self.index))
         }
       case "\"", "'":
         if self.currentChar! == quoteType {
@@ -917,10 +914,10 @@ class Lexer: Sequence {
         self.advance()
 
         let type: TokenType = wasErroneous ? .Unknown : .StringLiteral(interpolated ? .InterpolatedMiddle : .InterpolatedStart)
-        let token = Token(type: type, content: content, range: start..<self.index)
+        let token = makeToken(type: type, range: start..<self.index)
 
         self.subLexer = Lexer(self.source, parenthesisDepth: 1, startIndex: self.index)
-        self.interpoledStringQuoteType = quoteType
+        self.interpolatedStringQuoteType = quoteType
 
         return token
       }
@@ -952,7 +949,7 @@ class Lexer: Sequence {
     }
 
     let type: TokenType = wasErroneous ? .Unknown : .StringLiteral(interpolated ? .InterpolatedEnd : .Static)
-    return Token(type: type, content: content, range: start..<self.index)
+    return makeToken(type: type, range: start..<self.index)
   }
 
   func findEndOfCurlyQuoteStringLiteral() -> Index? {
@@ -999,6 +996,10 @@ class Lexer: Sequence {
 
   func getIndex(after index: Index) -> Index {
     return self.characters.index(after: index)
+  }
+
+  func resetToBeginning(of token: Token) {
+    resetIndex(to: token.range.range.lowerBound)
   }
 
   func resetIndex(to index: Index) {

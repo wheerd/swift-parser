@@ -9,11 +9,23 @@ func XCTAssertThrows<T>(_ expression: @autoclosure () throws -> T, message: Stri
     }
 }
 
+func assertParserHasError(_ input: String, error: String, file: StaticString = #file, line: UInt = #line) {
+    let source = Source("precedencegroup test { associativity: fubar }", identifier: "<string>")
+    let parser = Parser(source)
+    _ = parser.parse()
+    let actual_error = parser.diagnoses.map { String(describing: $0) }.joined(separator: "\n\n")
+    XCTAssertEqual(error, actual_error, "The actual error message was different than the expected one.")
+}
+
 class SwiftParserTests: XCTestCase {
     func testAssociativityError() {
-        let source = Source("precedencegroup test { associativity: fubar }", identifier: "<string>")
-        let parser = Parser(source)
-        XCTAssertThrows(try parser.parsePrecedenceGroup())
+        assertParserHasError(
+            "precedencegroup test { associativity: fubar }",
+            error:
+            "<string>:1:39 Error: Expected 'none', 'left', or 'right' after 'associativity'\n" +
+            "precedencegroup test { associativity: fubar }\n" +
+            "                                      ^"
+        )
     }
 
 

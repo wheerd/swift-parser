@@ -395,24 +395,31 @@ public struct Token {
   typealias Index = String.UnicodeScalarView.Index
 
   let type: TokenType
-  let content: String
-  let range: Range<Index>
-  let comment: String?
-  let commentStart: Index?
+  let range: SourceRange
+  let commentStart: SourceLocation?
 
-  init(type: TokenType, content: String, range: Range<Index>) {
+  var content: String {
+    return range.content
+  }
+
+  var comment: String? {
+    if let start = commentStart {
+      return range.source.substring(range: start.index..<range.range.lowerBound)
+    }
+    return nil
+  }
+
+  init(type: TokenType, range: SourceRange) {
     self.type = type
-    self.content = content
     self.range = range
-    self.comment = nil
     self.commentStart = nil
   }
 
-  init(token: Token, comment: String, commentStart: Index) {
+  init(token: Token, commentStart: SourceLocation) {
+    assert(commentStart.source === token.range.source)
+    assert(commentStart.index <= token.range.range.lowerBound)
     self.type = token.type
-    self.content = token.content
     self.range = token.range
-    self.comment = comment
     self.commentStart = commentStart
   }
 }
