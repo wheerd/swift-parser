@@ -1,15 +1,15 @@
-protocol ASTNode : CustomStringConvertible {
+protocol ASTNode: CustomStringConvertible {
 }
 
-protocol Statement : ASTNode {
-
-}
-
-protocol Expression : ASTNode {
+protocol Statement: ASTNode {
 
 }
 
-class BaseExpression : Expression {
+protocol Expression: ASTNode {
+
+}
+
+class BaseExpression: Expression {
 
     var description: String {
         get {
@@ -19,11 +19,11 @@ class BaseExpression : Expression {
 
 }
 
-protocol Declaration : ASTNode {
+protocol Declaration: ASTNode {
     var name: String { get }
 }
 
-class BaseDeclaration : Declaration {
+class BaseDeclaration: Declaration {
     let name: String
 
     init(_ name: String) {
@@ -37,11 +37,11 @@ class BaseDeclaration : Declaration {
     }
 }
 
-protocol OperatorDeclaration : Declaration {
+protocol OperatorDeclaration: Declaration {
 
 }
 
-class PrefixOperatorDeclaration : BaseDeclaration, OperatorDeclaration {
+class PrefixOperatorDeclaration: BaseDeclaration, OperatorDeclaration {
 
     override var description: String {
         return "prefix operator \(name)"
@@ -49,7 +49,7 @@ class PrefixOperatorDeclaration : BaseDeclaration, OperatorDeclaration {
 
 }
 
-class PostfixOperatorDeclaration : BaseDeclaration, OperatorDeclaration {
+class PostfixOperatorDeclaration: BaseDeclaration, OperatorDeclaration {
 
     override var description: String {
         return "postfix operator \(name)"
@@ -57,8 +57,8 @@ class PostfixOperatorDeclaration : BaseDeclaration, OperatorDeclaration {
 
 }
 
-class InfixOperatorDeclaration : BaseDeclaration, OperatorDeclaration {
-    let precedenceGroupName : String?
+class InfixOperatorDeclaration: BaseDeclaration, OperatorDeclaration {
+    let precedenceGroupName: String?
 
     init(_ name: String, precedenceGroup: String? = nil) {
         precedenceGroupName = precedenceGroup
@@ -77,7 +77,7 @@ enum Associativity {
     case Left, Right, None
 }
 
-class PrecedenceGroupDeclaration : BaseDeclaration {
+class PrecedenceGroupDeclaration: BaseDeclaration {
     let `higherThan`: [Identifier]
     let `lowerThan`: [Identifier]
     let `associativity`: Associativity

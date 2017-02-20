@@ -266,36 +266,36 @@ class Parser {
         return false
     }
 
-  @discardableResult
-  func diagnose(_ message: String, type: Diagnose.DiagnoseType = .Error) -> Diagnose {
-    let diag = Diagnose(
-      message,
-      type: type,
-      at: lexer.lastToken!.range.start
-    )
-    diagnoses.append(diag)
-    return diag
-  }
+    @discardableResult
+    func diagnose(_ message: String, type: Diagnose.DiagnoseType = .Error) -> Diagnose {
+        let diag = Diagnose(
+            message,
+            type: type,
+            at: lexer.lastToken!.range.start
+        )
+        diagnoses.append(diag)
+        return diag
+    }
 
-  @discardableResult
-  func diagnose(_ message: String, after token: Token, type: Diagnose.DiagnoseType = .Error) -> Diagnose {
-    let diag = Diagnose(
-      message,
-      type: type,
-      range: SourceRange(source: token.range.source, index: token.range.end.index)
-    )
-    diagnoses.append(diag)
-    return diag
-  }
+    @discardableResult
+    func diagnose(_ message: String, after token: Token, type: Diagnose.DiagnoseType = .Error) -> Diagnose {
+        let diag = Diagnose(
+            message,
+            type: type,
+            range: SourceRange(source: token.range.source, index: token.range.end.index)
+        )
+        diagnoses.append(diag)
+        return diag
+    }
 
-  @discardableResult
-  func diagnose(_ message: String, at token: Token, type: Diagnose.DiagnoseType = .Error) -> Diagnose {
-    let diag = Diagnose(
-      message,
-      type: type,
-      range: token.range
-    )
-    diagnoses.append(diag)
-    return diag
-  }
+    @discardableResult
+    func diagnose(_ message: String, at token: Token, type: Diagnose.DiagnoseType = .Error) -> Diagnose {
+        let diag = Diagnose(
+            message,
+            type: type,
+            range: token.range
+        )
+        diagnoses.append(diag)
+        return diag
+    }
 }

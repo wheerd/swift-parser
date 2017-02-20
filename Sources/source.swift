@@ -2,178 +2,178 @@ import Foundation
 
 class Source {
 
-  typealias Index = String.UnicodeScalarView.Index
+    typealias Index = String.UnicodeScalarView.Index
 
-  let content: String
-  let identifier: String
-  internal let characters: String.UnicodeScalarView
-  internal let start: Index
-  internal let end: Index
+    let content: String
+    let identifier: String
+    internal let characters: String.UnicodeScalarView
+    internal let start: Index
+    internal let end: Index
 
-  init(_ content: String, identifier: String) {
-    self.content = content
-    self.identifier = identifier
-    self.characters = content.unicodeScalars
-    self.start = content.unicodeScalars.startIndex
-    self.end = content.unicodeScalars.endIndex
-  }
-
-  convenience init?(path: String) {
-    if let content = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
-      self.init(String(content), identifier: path)
-    } else {
-      return nil
-    }
-  }
-
-  func character(at index: Index) -> UnicodeScalar? {
-    if index != self.end {
-        return self.characters[index]
+    init(_ content: String, identifier: String) {
+        self.content = content
+        self.identifier = identifier
+        self.characters = content.unicodeScalars
+        self.start = content.unicodeScalars.startIndex
+        self.end = content.unicodeScalars.endIndex
     }
 
-    return nil
-  }
-
-  func index(after index: Index, offset: Int = 1) -> Index? {
-    var index = index
-    var offset = offset
-    while index != self.end && offset > 0 {
-      index = self.characters.index(after: index)
-      offset -= 1
-    }
-    return index != self.end ? index : nil
-  }
-
-  func character(after index: Index, offset: Int = 1) -> UnicodeScalar? {
-    if let nextIndex = self.index(after: index, offset: offset) {
-      if nextIndex != self.end {
-        return self.characters[nextIndex]
-      }
+    convenience init?(path: String) {
+        if let content = try? String(contentsOfFile: path, encoding: String.Encoding.utf8) {
+            self.init(String(content), identifier: path)
+        } else {
+            return nil
+        }
     }
 
-    return nil
-  }
+    func character(at index: Index) -> UnicodeScalar? {
+        if index != self.end {
+            return self.characters[index]
+        }
 
-  func substring(range: Range<Index>) -> String {
-    return String(characters[range])
-  }
-
-  func length(range: Range<Index>) -> Int {
-    return characters.getCount(range: range)
-  }
-
-  func index(before index: Index, offset: Int = 1) -> Index? {
-    if offset == 0 {
-      return index
+        return nil
     }
 
-    var index = index
-    var offset = offset
-    while index != self.start && offset > 0 {
-      index = self.characters.index(before: index)
-      offset -= 1
+    func index(after index: Index, offset: Int = 1) -> Index? {
+        var index = index
+        var offset = offset
+        while index != self.end && offset > 0 {
+            index = self.characters.index(after: index)
+            offset -= 1
+        }
+        return index != self.end ? index : nil
     }
 
-    return (index != self.start || offset == 0) ? index : nil
-  }
+    func character(after index: Index, offset: Int = 1) -> UnicodeScalar? {
+        if let nextIndex = self.index(after: index, offset: offset) {
+            if nextIndex != self.end {
+                return self.characters[nextIndex]
+            }
+        }
 
-  func character(before index: Index, offset: Int = 1) -> UnicodeScalar? {
-    if let prevIndex = self.index(before: index, offset: offset) {
-      return self.characters[prevIndex]
+        return nil
     }
 
-    return nil
-  }
-
-  func getLineNumber(index: Index) -> Int {
-    var index = index
-    var line: Int = 1
-    var lastWasLF = false
-    while index != self.start {
-      index = self.characters.index(before: index)
-      if self.characters[index] == "\r" && !lastWasLF {
-        line += 1
-      }
-      if self.characters[index] == "\n" {
-        lastWasLF = true
-        line += 1
-      } else {
-        lastWasLF = false
-      }
+    func substring(range: Range<Index>) -> String {
+        return String(characters[range])
     }
 
-    return line
-  }
-
-  func getLine(number: Int) -> String? {
-    var line: String? = nil
-    var currentNumber = 1
-    content.enumerateLines { (currentLine, stop) in
-      if currentNumber == number {
-        line = currentLine
-        stop = true
-      }
-      currentNumber += 1
+    func length(range: Range<Index>) -> Int {
+        return characters.getCount(range: range)
     }
-    return line
-  }
 
-  func getColumn(index: Index) -> Int {
-    var index = index
-    var col: Int = 1
-    while index != self.start {
-      index = self.characters.index(before: index)
-      if self.characters[index] == "\r" || self.characters[index] == "\n" {
+    func index(before index: Index, offset: Int = 1) -> Index? {
+        if offset == 0 {
+            return index
+        }
+
+        var index = index
+        var offset = offset
+        while index != self.start && offset > 0 {
+            index = self.characters.index(before: index)
+            offset -= 1
+        }
+
+        return (index != self.start || offset == 0) ? index : nil
+    }
+
+    func character(before index: Index, offset: Int = 1) -> UnicodeScalar? {
+        if let prevIndex = self.index(before: index, offset: offset) {
+            return self.characters[prevIndex]
+        }
+
+        return nil
+    }
+
+    func getLineNumber(index: Index) -> Int {
+        var index = index
+        var line: Int = 1
+        var lastWasLF = false
+        while index != self.start {
+            index = self.characters.index(before: index)
+            if self.characters[index] == "\r" && !lastWasLF {
+                line += 1
+            }
+            if self.characters[index] == "\n" {
+                lastWasLF = true
+                line += 1
+            } else {
+                lastWasLF = false
+            }
+        }
+
+        return line
+    }
+
+    func getLine(number: Int) -> String? {
+        var line: String? = nil
+        var currentNumber = 1
+        content.enumerateLines { (currentLine, stop) in
+            if currentNumber == number {
+                line = currentLine
+                stop = true
+            }
+            currentNumber += 1
+        }
+        return line
+    }
+
+    func getColumn(index: Index) -> Int {
+        var index = index
+        var col: Int = 1
+        while index != self.start {
+            index = self.characters.index(before: index)
+            if self.characters[index] == "\r" || self.characters[index] == "\n" {
+                return col
+            }
+
+            col += 1
+        }
+
         return col
-      }
-
-      col += 1
     }
 
-    return col
-  }
+    func getContext(index: Index) -> (Range<Index>, Int, Int) {
+        var index = index
+        var endIndex = index
+        var col: Int = 1
+        var line: Int = 1
+        var lastWasLF = false
 
-  func getContext(index: Index) -> (Range<Index>, Int, Int) {
-    var index = index
-    var endIndex = index
-    var col: Int = 1
-    var line: Int = 1
-    var lastWasLF = false
+        while index != self.start {
+            let newStartIndex = self.characters.index(before: index)
+            if self.characters[newStartIndex] == "\n" {
+                lastWasLF = true
+                break
+            }
+            if self.characters[index] == "\r" {
+                break
+            }
 
-    while index != self.start {
-      let newStartIndex = self.characters.index(before: index)
-      if self.characters[newStartIndex] == "\n" {
-        lastWasLF = true
-        break
-      }
-      if self.characters[index] == "\r" {
-        break
-      }
+            index = newStartIndex
+            col += 1
+        }
 
-      index = newStartIndex
-      col += 1
+        let startIndex = index
+        while index != self.start {
+            index = self.characters.index(before: index)
+            if self.characters[index] == "\r" && !lastWasLF {
+                line += 1
+            }
+            if self.characters[index] == "\n" {
+                lastWasLF = true
+                line += 1
+            } else {
+                lastWasLF = false
+            }
+        }
+
+        while endIndex != self.end && self.characters[endIndex] != "\n" && self.characters[endIndex] != "\r" {
+            endIndex = self.characters.index(after: endIndex)
+        }
+
+        return (startIndex..<endIndex, line, col)
     }
-
-    let startIndex = index
-    while index != self.start {
-      index = self.characters.index(before: index)
-      if self.characters[index] == "\r" && !lastWasLF {
-        line += 1
-      }
-      if self.characters[index] == "\n" {
-        lastWasLF = true
-        line += 1
-      } else {
-        lastWasLF = false
-      }
-    }
-
-    while endIndex != self.end && self.characters[endIndex] != "\n" && self.characters[endIndex] != "\r" {
-      endIndex = self.characters.index(after: endIndex)
-    }
-
-    return (startIndex..<endIndex, line, col)
-  }
 
 }
 
@@ -205,7 +205,7 @@ struct SourceRange: CustomStringConvertible {
     let range: Range<Source.Index>
 
     var content: String {
-      return source.substring(range: range)
+        return source.substring(range: range)
     }
 
     var start: SourceLocation {
@@ -234,9 +234,9 @@ extension SourceRange: Equatable {
 
 extension SourceRange {
     init(source: Source, index: Source.Index) {
-      self.init(source: source, range: index..<index)
+        self.init(source: source, range: index..<index)
     }
     init(location: SourceLocation) {
-      self.init(source: location.source, index: location.index)
+        self.init(source: location.source, index: location.index)
     }
 }

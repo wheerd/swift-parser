@@ -1,4 +1,4 @@
-indirect enum Type : CustomStringConvertible {
+indirect enum Type: CustomStringConvertible {
     typealias IdentifierWithGeneric = (Identifier, [Type])
 
     case ArrayType(Type)
@@ -58,7 +58,7 @@ indirect enum Type : CustomStringConvertible {
     }
 }
 
-class Identifier : CustomStringConvertible {
+class Identifier: CustomStringConvertible {
     var name: String
 
     init(_ name: String) {
