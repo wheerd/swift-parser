@@ -1,4 +1,5 @@
 indirect enum Type: CustomStringConvertible {
+
     typealias IdentifierWithGeneric = (Identifier, [Type])
 
     case ArrayType(Type)
@@ -21,8 +22,8 @@ indirect enum Type: CustomStringConvertible {
                 return "[\(inner)]"
             case let .DictionaryType(key, value):
                 return "[\(key): \(value)]"
-            case let .FunctionType(parameters, return_type):
-                return "(\((parameters.map { $0.description }).joined(separator: ", "))) -> \(return_type)"
+            case let .FunctionType(parameters, returnType):
+                return "(\((parameters.map { $0.description }).joined(separator: ", "))) -> \(returnType)"
             case let .TupleType(types):
                 return "(\((types.map { $0.description }).joined(separator: ", ")))"
             case let .TypeIdentifier(parts):
@@ -56,9 +57,11 @@ indirect enum Type: CustomStringConvertible {
     static func Identifier(_ name: String) -> Type {
         return .TypeIdentifier([(OriginalIdentifier(name), [])])
     }
+
 }
 
 class Identifier: CustomStringConvertible {
+
     var name: String
 
     init(_ name: String) {
@@ -68,6 +71,7 @@ class Identifier: CustomStringConvertible {
     var description: String {
         return self.name
     }
+
 }
 
 typealias OriginalIdentifier = Identifier

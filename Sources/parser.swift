@@ -18,7 +18,7 @@ class Parser {
     func parseType() -> Type {
         var type: Type = .Unknown
         let token = self.lexer.lexNextToken()
-        type_switch: switch token.type {
+        typeSwitch: switch token.type {
             case .Punctuator(.LeftSquare):
                 let key = self.parseType()
                 var value: Type? = nil
@@ -31,18 +31,18 @@ class Parser {
                     self.diagnose("Expected ], found \(after.content)")
                     break
                 }
-                if let actual_value = value {
-                    type = .DictionaryType(key, actual_value)
+                if let actualValue = value {
+                    type = .DictionaryType(key, actualValue)
                 } else {
                     type = .ArrayType(key)
                 }
             case .Punctuator(.LeftParenthesis):
                 var after: Token
-                var tuple_args = [Type]()
+                var tupleArgs = [Type]()
                 repeat {
                     let inner = self.parseType()
                     after = self.lexer.lexNextToken()
-                    tuple_args.append(inner)
+                    tupleArgs.append(inner)
                 } while after.type == .Punctuator(.Comma)
                 guard after.type == .Punctuator(.RightParenthesis) else {
                     self.diagnose("Expected ), found \(after.content)")
@@ -51,24 +51,24 @@ class Parser {
                 after = self.lexer.peekNextToken()
                 if after.type == .Punctuator(.Arrow) {
                     _ = self.lexer.lexNextToken()
-                    let return_type = self.parseType()
-                    type = .FunctionType(tuple_args, return_type)
+                    let returnType = self.parseType()
+                    type = .FunctionType(tupleArgs, returnType)
                 } else {
-                    type = .TupleType(tuple_args)
+                    type = .TupleType(tupleArgs)
                 }
             case .Identifier(_):
-                var parts = [((Identifier, [Type]))]()
-                var ident_token = token
-                identifier_loop: repeat {
-                    let identifier = Identifier(ident_token.content)
+                var parts = [(Identifier, [Type])]()
+                var identToken = token
+                identifierLoop: repeat {
+                    let identifier = Identifier(identToken.content)
                     switch self.lexer.peekNextToken().type {
                         case .Punctuator(.Period):
                             parts.append((identifier, []))
                             let dot = self.lexer.lexNextToken()
-                            ident_token = self.lexer.lexNextToken()
-                            if ident_token.type == .Identifier(false) && (ident_token.content == "Type" || ident_token.content == "Protocol") {
+                            identToken = self.lexer.lexNextToken()
+                            if identToken.type == .Identifier(false) && (identToken.content == "Type" || identToken.content == "Protocol") {
                                 self.lexer.resetToBeginning(of: dot)
-                                break identifier_loop
+                                break identifierLoop
                             }
                         case .BinaryOperator("<"):
                             var generics = [Type]()
@@ -79,22 +79,22 @@ class Parser {
                             let after = self.lexer.lexNextToken()
                             if case let .PostfixOperator(op) = after.type, op.hasPrefix(">") {
                                 if op != ">" {
-                                    let next_index = self.lexer.getIndex(after: after.range.range.lowerBound)
-                                    self.lexer.resetIndex(to: next_index)
+                                    let nextIndex = self.lexer.getIndex(after: after.range.range.lowerBound)
+                                    self.lexer.resetIndex(to: nextIndex)
                                 }
                             } else {
                                 self.diagnose("Expected >, found \(after.content)")
-                                break type_switch
+                                break typeSwitch
                             }
                             parts.append((identifier, generics))
                             guard self.lexer.peekNextToken().type == .Punctuator(.Period) else {
-                                break identifier_loop
+                                break identifierLoop
                             }
                             _ = self.lexer.lexNextToken()
-                            ident_token = self.lexer.lexNextToken()
+                            identToken = self.lexer.lexNextToken()
                         default:
                             parts.append((identifier, []))
-                            break identifier_loop
+                            break identifierLoop
                     }
                 } while true
                 type = .TypeIdentifier(parts)
@@ -104,7 +104,7 @@ class Parser {
                 print("Error: " + String(describing: token))
         }
 
-        postfix_loop: while true {
+        postfixLoop: while true {
             let nextToken = self.lexer.peekNextToken()
             switch nextToken.type {
                 case .Punctuator(.PostfixExclaimationMark):
@@ -124,11 +124,11 @@ class Parser {
                                 type = .MetaProtocol(type)
                             default:
                                 self.lexer.resetToBeginning(of: nextToken)
-                                break postfix_loop
+                                break postfixLoop
                         }
                     }
                 default:
-                    break postfix_loop
+                    break postfixLoop
             }
         }
 
@@ -144,10 +144,10 @@ class Parser {
         guard kwtoken.type == .DeclarationKeyword(.PrecedenceGroup) else {
             preconditionFailure("Should only parsePrecedenceGroup at the beginning of a precedencegroup declaration")
         }
-        let ident_token = lexer.lexNextToken()
-        guard case .Identifier(_) = ident_token.type else {
+        let identToken = lexer.lexNextToken()
+        guard case .Identifier(_) = identToken.type else {
             let error = self.diagnose("Expected identifier after 'precedencegroup'")
-            if ident_token.type == .Punctuator(.LeftBrace) || lexer.peekNextToken().type == .Punctuator(.LeftBrace) {
+            if identToken.type == .Punctuator(.LeftBrace) || lexer.peekNextToken().type == .Punctuator(.LeftBrace) {
                 skipWhile { $0.type != .Punctuator(.RightBrace) }
             }
             consumeIf(type: .Punctuator(.RightBrace))
@@ -155,7 +155,7 @@ class Parser {
         }
 
         var valid = true
-        let name = ident_token.content
+        let name = identToken.content
         var higherThan: [Identifier]? = nil
         var lowerThan: [Identifier]? = nil
         var associativity: Associativity? = nil
@@ -167,13 +167,13 @@ class Parser {
             consumeIf(type: .Punctuator(.RightBrace))
         }
 
-        let open_brace = lexer.lexNextToken()
-        guard open_brace.type == .Punctuator(.LeftBrace) else {
+        let openBrace = lexer.lexNextToken()
+        guard openBrace.type == .Punctuator(.LeftBrace) else {
             throw self.diagnose("Expected '{' after name of precedence group")
         }
-        var attribute_name_token: Token = lexer.lexNextToken()
-        while attribute_name_token.type == .Identifier(false) {
-            let name = attribute_name_token.content
+        var attributeNameToken: Token = lexer.lexNextToken()
+        while attributeNameToken.type == .Identifier(false) {
+            let name = attributeNameToken.content
             let colon = lexer.lexNextToken()
             if colon.type != .Punctuator(.Colon) {
                 self.diagnose("Expected colon after attribute name in precedence group")
@@ -222,20 +222,20 @@ class Parser {
                             throw error
                         }
                         groups.append(group.content)
-                    } while (consumeIf(type: .Punctuator(.Comma)))
+                    } while consumeIf(type: .Punctuator(.Comma))
                     if name == "higherThan" {
                         higherThan = groups.map { Identifier($0) }
                     } else {
                         lowerThan = groups.map { Identifier($0) }
                     }
                 default:
-                    let error = self.diagnose("'\(name)' is not a valid precedence group attribute", at: attribute_name_token)
+                    let error = self.diagnose("'\(name)' is not a valid precedence group attribute", at: attributeNameToken)
                     abortBlock()
                     throw error
             }
-            attribute_name_token = lexer.lexNextToken()
+            attributeNameToken = lexer.lexNextToken()
         }
-        guard attribute_name_token.type == .Punctuator(.RightBrace) else {
+        guard attributeNameToken.type == .Punctuator(.RightBrace) else {
             throw self.diagnose("Expected operator attribute identifier in precedence group body")
         }
         return PrecedenceGroupDeclaration(
@@ -298,4 +298,5 @@ class Parser {
         diagnoses.append(diag)
         return diag
     }
+
 }

@@ -353,7 +353,7 @@ public enum TokenType {
     }
 
     var isWhitespace: Bool {
-        switch (self) {
+        switch self {
             case .Whitespace, .Comment(_): return true
             default: return false
         }

@@ -178,6 +178,7 @@ class Source {
 }
 
 struct SourceLocation: CustomStringConvertible {
+
     let source: Source
     let index: Source.Index
 
@@ -195,12 +196,15 @@ struct SourceLocation: CustomStringConvertible {
 }
 
 extension SourceLocation: Equatable {
+
     static func == (lhs: SourceLocation, rhs: SourceLocation) -> Bool {
         return lhs.source === rhs.source && lhs.index == rhs.index
     }
+
 }
 
 struct SourceRange: CustomStringConvertible {
+
     let source: Source
     let range: Range<Source.Index>
 
@@ -224,19 +228,25 @@ struct SourceRange: CustomStringConvertible {
         }
         return "\(source.identifier):\(startLine):\(start.column)-\(endLine):\(end.column)"
     }
+
 }
 
 extension SourceRange: Equatable {
+
     static func == (lhs: SourceRange, rhs: SourceRange) -> Bool {
         return lhs.source === rhs.source && lhs.range == rhs.range
     }
+
 }
 
 extension SourceRange {
+
     init(source: Source, index: Source.Index) {
         self.init(source: source, range: index..<index)
     }
+
     init(location: SourceLocation) {
         self.init(source: location.source, index: location.index)
     }
+
 }

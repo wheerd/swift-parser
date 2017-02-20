@@ -104,10 +104,10 @@ class Diagnose: Error, CustomStringConvertible {
         description += "^" * max(count, 1)
         if !fixIts.isEmpty {
             description += "\n\nFix:\n"
-            description += fixIts.map{String(describing: $0)}.joined(separator: "\n")
+            description += fixIts.map { String(describing: $0) }.joined(separator: "\n")
         }
         if !related.isEmpty {
-            description += "\n\n" + related.map{String(describing: $0)}.joined(separator: "\n")
+            description += "\n\n" + related.map { String(describing: $0) }.joined(separator: "\n")
         }
         return description
     }

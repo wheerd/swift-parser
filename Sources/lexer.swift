@@ -540,7 +540,7 @@ class Lexer: Sequence {
                 break
         }
 
-        let type: TokenTypev = leftBound == rightBound ? .BinaryOperator(content) : leftBound ? .PostfixOperator(content) : .PrefixOperator(content)
+        let type: TokenType = leftBound == rightBound ? .BinaryOperator(content) : leftBound ? .PostfixOperator(content) : .PrefixOperator(content)
 
         return makeToken(type: type, range: start..<self.index)
     }

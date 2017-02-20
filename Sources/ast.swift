@@ -1,4 +1,5 @@
 protocol ASTNode: CustomStringConvertible {
+
 }
 
 protocol Statement: ASTNode {
@@ -24,6 +25,7 @@ protocol Declaration: ASTNode {
 }
 
 class BaseDeclaration: Declaration {
+
     let name: String
 
     init(_ name: String) {
@@ -35,6 +37,7 @@ class BaseDeclaration: Declaration {
             preconditionFailure("This method must be overridden")
         }
     }
+
 }
 
 protocol OperatorDeclaration: Declaration {
@@ -58,6 +61,7 @@ class PostfixOperatorDeclaration: BaseDeclaration, OperatorDeclaration {
 }
 
 class InfixOperatorDeclaration: BaseDeclaration, OperatorDeclaration {
+
     let precedenceGroupName: String?
 
     init(_ name: String, precedenceGroup: String? = nil) {
@@ -71,6 +75,7 @@ class InfixOperatorDeclaration: BaseDeclaration, OperatorDeclaration {
         }
         return "infix operator \(name)"
     }
+
 }
 
 enum Associativity {
@@ -78,6 +83,7 @@ enum Associativity {
 }
 
 class PrecedenceGroupDeclaration: BaseDeclaration {
+
     let `higherThan`: [Identifier]
     let `lowerThan`: [Identifier]
     let `associativity`: Associativity

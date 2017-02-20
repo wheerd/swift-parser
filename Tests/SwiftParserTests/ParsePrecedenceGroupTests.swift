@@ -148,10 +148,10 @@ class ParsePrecedenceGroupTests: ParserTestCase {
         line: UInt = #line
     ) -> (PrecedenceGroupDeclaration) -> () {
         return { group in
-            let actual_higher = Set(group.higherThan.map { $0.name })
-            XCTAssertEqual(actual_higher, higherThan, "Wrong 'higherThan' for precedence group.", file: file, line: line)
-            let actual_lower = Set(group.lowerThan.map { $0.name })
-            XCTAssertEqual(actual_lower, lowerThan, "Wrong 'lowerThan' for precedence group.", file: file, line: line)
+            let actualHigher = Set(group.higherThan.map { $0.name })
+            XCTAssertEqual(actualHigher, higherThan, "Wrong 'higherThan' for precedence group.", file: file, line: line)
+            let actualLower = Set(group.lowerThan.map { $0.name })
+            XCTAssertEqual(actualLower, lowerThan, "Wrong 'lowerThan' for precedence group.", file: file, line: line)
             XCTAssertEqual(group.associativity, associativity, "Wrong 'associativity' for precedence group.", file: file, line: line)
             XCTAssertEqual(group.assignment, assignment, "Wrong 'assignment' for precedence group.", file: file, line: line)
         }

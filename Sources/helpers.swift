@@ -199,11 +199,11 @@ extension String {
         return self.characters.count
     }
 
-    subscript (i: Int) -> Character {
+    subscript(i: Int) -> Character {
         return self.characters[index(startIndex, offsetBy: i)]
     }
 
-    subscript (range: Range<Int>) -> String {
+    subscript(range: Range<Int>) -> String {
         let startOffset = clamp(range.lowerBound, lower: 0, upper: length)
         let endOffset = clamp(range.upperBound, lower: 0, upper: length)
         let start = index(startIndex, offsetBy: startOffset)
